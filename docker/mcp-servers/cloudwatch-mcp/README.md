@@ -1,26 +1,50 @@
-# CloudWatch MCP Server
+# CloudWatch MCP Server - Transport Wrapper
 
-A Model Context Protocol (MCP) server that provides CloudWatch metrics and logs access for AI-powered database monitoring and analysis.
+A containerized transport wrapper for the AWS Labs CloudWatch MCP server, providing HTTP access to CloudWatch metrics and logs for AI-powered database monitoring and analysis.
 
 ## 🚀 Features
 
-- **CloudWatch Metrics**: Retrieve and analyze AWS CloudWatch metrics
-- **CloudWatch Logs**: Access and filter CloudWatch log events
-- **RDS Performance**: Specialized RDS database performance metrics
-- **MCP Protocol**: Full Model Context Protocol implementation
-- **Health Checks**: Built-in health monitoring and diagnostics
+- **AWS Labs Integration**: Uses the official AWS Labs CloudWatch MCP server
+- **HTTP Transport**: Provides HTTP/REST interface for the MCP protocol
+- **CloudWatch Metrics**: Full access to AWS CloudWatch metrics via AWS Labs server
+- **CloudWatch Logs**: Complete CloudWatch logs access through AWS Labs server
+- **Load Balancer Ready**: Designed for deployment behind AWS Application Load Balancer
+- **Health Checks**: Built-in health monitoring for container orchestration
+- **Auto-scaling**: Supports ECS Fargate auto-scaling
 
 ## 🏗️ Architecture
 
 ```
-CloudWatch MCP Server
-├── FastAPI Web Server (Port 8000)
-├── MCP Protocol Handler
-├── CloudWatch Tools
-│   ├── Metrics Client
-│   └── Logs Client
-└── Health Monitoring
+Transport Wrapper Architecture
+├── FastAPI Transport Wrapper (Port 8000)
+│   ├── HTTP Endpoints (/mcp, /health)
+│   └── Request Forwarding
+├── AWS Labs CloudWatch MCP Server (Port 3000)
+│   ├── MCP Protocol Implementation
+│   ├── CloudWatch Metrics Client
+│   └── CloudWatch Logs Client
+└── Health Monitoring & Load Balancer Integration
 ```
+
+## 📋 Available Tools
+
+This wrapper provides access to all AWS Labs CloudWatch MCP server tools:
+
+### CloudWatch Metrics Tools
+- **get_cloudwatch_metrics**: Retrieve CloudWatch metrics
+- **list_cloudwatch_metrics**: List available metrics
+- **get_metric_statistics**: Get detailed metric statistics
+
+### CloudWatch Logs Tools  
+- **get_cloudwatch_logs**: Access CloudWatch log events
+- **list_log_groups**: List available log groups
+- **filter_log_events**: Filter and search log events
+
+### RDS Specific Tools
+- **get_rds_performance_metrics**: Comprehensive RDS performance data
+- **get_rds_slow_query_logs**: RDS slow query analysis
+
+*Note: Exact tool names and parameters depend on the AWS Labs MCP server version. Refer to the [AWS Labs MCP Server documentation](https://github.com/awslabs/mcp-server-aws) for complete details.*
 
 ## 📋 Available Tools
 

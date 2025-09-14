@@ -1,0 +1,193 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'MCP Servers Services - CloudWatch MCP Server ECS Service'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: 'mcp-servers'
+    Description: Project name for resource naming
+    
+  Environment:
+    Type: String
+    Default: 'dev'
+    AllowedValues: ['dev', 'staging', 'prod']
+    Description: Environment name
+    
+  ECSClusterName:
+    Type: String
+    Description: ECS Cluster name
+    
+  CloudWatchMCPImageURI:
+    Type: String
+    Description: CloudWatch MCP Docker image URI
+    
+  VpcId:
+    Type: String
+    Description: VPC ID
+    
+  PrivateSubnet1Id:
+    Type: String
+    Description: Private Subnet 1 ID
+    
+  PrivateSubnet2Id:
+    Type: String
+    Description: Private Subnet 2 ID
+    
+  ECSSecurityGroupId:
+    Type: String
+    Description: ECS Security Group ID
+    
+  CloudWatchMCPTargetGroupArn:
+    Type: String
+    Description: CloudWatch MCP Target Group ARN
+    
+  ECSTaskExecutionRoleArn:
+    Type: String
+    Description: ECS Task Execution Role ARN
+    
+  CloudWatchMCPTaskRoleArn:
+    Type: String
+    Description: CloudWatch MCP Task Role ARN
+    
+  DesiredCount:
+    Type: Number
+    Default: 2
+    MinValue: 1
+    MaxValue: 10
+    Description: Desired number of tasks
+    
+  TaskCpu:
+    Type: String
+    Default: '512'
+    AllowedValues: ['256', '512', '1024', '2048', '4096']
+    Description: CPU units for ECS tasks
+    
+  TaskMemory:
+    Type: String
+    Default: '1024'
+    AllowedValues: ['512', '1024', '2048', '4096', '8192']
+    Description: Memory (MB) for ECS tasks
+
+Resources:
+  # ==========================================
+  # CLOUDWATCH MCP SERVER
+  # ==========================================
+
+  CloudWatchMCPTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${ProjectName}-${Environment}-cloudwatch-mcp'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: !Ref TaskCpu
+      Memory: !Ref TaskMemory
+      ExecutionRoleArn: !Ref ECSTaskExecutionRoleArn
+      TaskRoleArn: !Ref CloudWatchMCPTaskRoleArn
+      ContainerDefinitions:
+        - Name: cloudwatch-mcp-server
+          Image: !Ref CloudWatchMCPImageURI
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8000
+              Protocol: tcp
+          Environment:
+            - Name: MCP_PORT
+              Value: '8000'
+            - Name: MCP_HOST
+              Value: '0.0.0.0'
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref 'AWS::Region'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Sub '/ecs/${ProjectName}/${Environment}/cloudwatch-mcp'
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: ecs
+          # HealthCheck temporarily disabled for debugging
+          # HealthCheck:
+          #   Command:
+          #     - CMD-SHELL
+          #     - python /app/health_check.py
+          #   Interval: 30
+          #   Timeout: 5
+          #   Retries: 3
+          #   StartPeriod: 60
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-cloudwatch-mcp-task'
+
+  CloudWatchMCPService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub '${ProjectName}-${Environment}-cloudwatch-mcp-service'
+      Cluster: !Ref ECSClusterName
+      TaskDefinition: !Ref CloudWatchMCPTaskDefinition
+      DesiredCount: !Ref DesiredCount
+      LaunchType: FARGATE
+      PlatformVersion: LATEST
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          SecurityGroups:
+            - !Ref ECSSecurityGroupId
+          Subnets:
+            - !Ref PrivateSubnet1Id
+            - !Ref PrivateSubnet2Id
+          AssignPublicIp: DISABLED
+      LoadBalancers:
+        - TargetGroupArn: !Ref CloudWatchMCPTargetGroupArn
+          ContainerName: cloudwatch-mcp-server
+          ContainerPort: 8000
+      HealthCheckGracePeriodSeconds: 120
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+      EnableExecuteCommand: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-cloudwatch-mcp-service'
+
+  # ==========================================
+  # AUTO SCALING
+  # ==========================================
+
+  CloudWatchMCPAutoScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      ServiceNamespace: ecs
+      ResourceId: !Sub 'service/${ECSClusterName}/${CloudWatchMCPService.Name}'
+      ScalableDimension: ecs:service:DesiredCount
+      MinCapacity: 1
+      MaxCapacity: 10
+      RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService'
+
+  CloudWatchMCPAutoScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub '${ProjectName}-${Environment}-cloudwatch-mcp-scaling-policy'
+      PolicyType: TargetTrackingScaling
+      ServiceNamespace: ecs
+      ResourceId: !Sub 'service/${ECSClusterName}/${CloudWatchMCPService.Name}'
+      ScalableDimension: ecs:service:DesiredCount
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: 70.0
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        ScaleOutCooldown: 300
+        ScaleInCooldown: 300
+
+Outputs:
+  CloudWatchMCPServiceName:
+    Description: CloudWatch MCP Service Name
+    Value: !Ref CloudWatchMCPService
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-cloudwatch-mcp-service-name'
+
+  CloudWatchMCPTaskDefinitionArn:
+    Description: CloudWatch MCP Task Definition ARN
+    Value: !Ref CloudWatchMCPTaskDefinition
+    Export:
+      Name: !Sub '${ProjectName}-${Environment}-cloudwatch-mcp-task-definition-arn'
