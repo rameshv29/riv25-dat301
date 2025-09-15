@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Clone the AWS Labs MCP repository
-RUN git clone https://github.com/awslabs/mcp-server-aws.git /tmp/mcp-server-aws
+RUN git clone https://github.com/awslabs/mcp.git /tmp/mcp-server-aws
 
 # Install the CloudWatch MCP server from AWS Labs
 RUN cd /tmp/mcp-server-aws && pip install -e .
