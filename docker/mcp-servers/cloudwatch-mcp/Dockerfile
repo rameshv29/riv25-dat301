@@ -34,5 +34,10 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python /app/health_check.py
 
+<<<<<<< HEAD
 # Run the AWS Labs CloudWatch MCP server with HTTP transport
 CMD ["python", "/app/run.py"]
+=======
+# Run the transport wrapper
+CMD ["python", "transport_wrapper.py"]
+>>>>>>> 655afdb520479bce1a15e983aed22006afdf08ec
