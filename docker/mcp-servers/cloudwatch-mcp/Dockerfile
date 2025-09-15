@@ -11,10 +11,14 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Copy requirements and install dependencies
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
 # Clone the AWS Labs MCP repository and install CloudWatch MCP server
 RUN git clone https://github.com/awslabs/mcp.git /tmp/mcp && \
     cd /tmp/mcp/src/cloudwatch-mcp-server && \
-    pip install -e . && \
+    pip install . && \
     cd /app && \
     rm -rf /tmp/mcp
 
