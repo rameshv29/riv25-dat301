@@ -8,8 +8,8 @@ httpx>=0.25.2
 boto3>=1.34.0
 botocore>=1.34.0
 
-# MCP Protocol (AWS Labs MCP server will be installed separately)
-# The AWS Labs MCP server includes all necessary MCP dependencies
+# MCP Protocol (embedded implementation)
+mcp>=1.0.0
 
 # Development and testing
 pytest>=7.4.3

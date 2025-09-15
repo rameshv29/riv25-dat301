@@ -24,11 +24,27 @@ def main():
         adapter = HTTPAdapter(max_retries=retry_strategy)
         session.mount("http://", adapter)
         
-        # Make health check request
-        response = session.get(
-            "http://localhost:8000/health",
-            timeout=5
-        )
+        # Make health check request to MCP server
+        # Try the root endpoint first, then a simple MCP request
+        try:
+            response = session.get("http://localhost:8000/", timeout=5)
+        except:
+            # If root doesn't work, try a simple MCP initialize request
+            response = session.post(
+                "http://localhost:8000/",
+                json={
+                    "jsonrpc": "2.0",
+                    "id": "health-check",
+                    "method": "initialize",
+                    "params": {
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": {},
+                        "clientInfo": {"name": "health-check", "version": "1.0.0"}
+                    }
+                },
+                headers={"Content-Type": "application/json"},
+                timeout=5
+            )
         
         if response.status_code == 200:
             print("Health check passed")
