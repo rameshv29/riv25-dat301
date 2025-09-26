@@ -13,6 +13,7 @@ AWS_REGION=${AWS_REGION:-$(aws configure get region || echo "us-east-1")}
 AWS_ACCOUNT_ID=${AWS_ACCOUNT_ID:-$(aws sts get-caller-identity --query Account --output text)}
 
 # ECR Repository name (should match CloudFormation template)
+# The enhanced template uses a different naming pattern
 ECR_REPO_NAME="${PROJECT_NAME}/${ENVIRONMENT}/cloudwatch-mcp-server"
 ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}"
 
@@ -32,19 +33,18 @@ echo "  Build Timestamp: ${BUILD_TIMESTAMP}"
 # Change to the CloudWatch MCP directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-MCP_DIR="${REPO_ROOT}/docker/mcp-servers/cloudwatch-mcp"
+MCP_DIR="${REPO_ROOT}/mcpservers/cloudwatch-mcp-server"
 
 if [ ! -d "${MCP_DIR}" ]; then
     echo "❌ CloudWatch MCP directory not found: ${MCP_DIR}"
     exit 1
 fi
 
-cd "${MCP_DIR}"
-echo "📁 Working directory: $(pwd)"
+echo "📁 Working directory: ${MCP_DIR}"
 
-# Verify Dockerfile exists
-if [ ! -f "Dockerfile" ]; then
-    echo "❌ Dockerfile not found in ${MCP_DIR}"
+# Verify Dockerfile exists (use HTTP version)
+if [ ! -f "${MCP_DIR}/Dockerfile.http" ]; then
+    echo "❌ Dockerfile.http not found in ${MCP_DIR}"
     exit 1
 fi
 
@@ -65,15 +65,17 @@ else
     echo "✅ ECR repository exists: ${ECR_REPO_NAME}"
 fi
 
-# Build Docker image
-echo "🔨 Building Docker image..."
+# Build Docker image using HTTP Dockerfile with correct platform for ECS Fargate
+echo "🔨 Building Docker image for linux/amd64 platform..."
 docker build \
+    --platform linux/amd64 \
+    --file "${MCP_DIR}/Dockerfile.http" \
     --tag "cloudwatch-mcp-server:${DOCKER_TAG}" \
     --tag "cloudwatch-mcp-server:${BUILD_TIMESTAMP}" \
     --tag "${ECR_URI}:${DOCKER_TAG}" \
     --tag "${ECR_URI}:${BUILD_TIMESTAMP}" \
     --build-arg BUILD_TIMESTAMP="${BUILD_TIMESTAMP}" \
-    .
+    "${MCP_DIR}"
 
 echo "✅ Docker image built successfully"
 
@@ -93,36 +95,44 @@ aws ecr describe-images \
     --query 'imageDetails[0].{ImageDigest:imageDigest,ImageSizeInBytes:imageSizeInBytes,ImagePushedAt:imagePushedAt}' \
     --output table
 
-# Test the image locally (optional)
-if [ "${TEST_LOCAL:-false}" = "true" ]; then
-    echo "🧪 Testing image locally..."
+# Test the image locally
+echo "🧪 Testing image locally..."
+
+# Stop any existing container
+docker stop cloudwatch-mcp-test 2>/dev/null || true
+docker rm cloudwatch-mcp-test 2>/dev/null || true
+
+# Run test container
+docker run -d \
+    --name cloudwatch-mcp-test \
+    -p 8003:8000 \
+    -e AWS_DEFAULT_REGION="${AWS_REGION}" \
+    "${ECR_URI}:${DOCKER_TAG}"
+
+# Wait for container to start
+echo "⏳ Waiting for container to start..."
+sleep 15
+
+# Test health endpoints
+echo "🔍 Testing health endpoints..."
+if curl -f http://localhost:8003/health >/dev/null 2>&1; then
+    echo "✅ Health endpoint test passed"
     
-    # Stop any existing container
-    docker stop cloudwatch-mcp-test 2>/dev/null || true
-    docker rm cloudwatch-mcp-test 2>/dev/null || true
-    
-    # Run test container
-    docker run -d \
-        --name cloudwatch-mcp-test \
-        -p 8001:8000 \
-        -e AWS_DEFAULT_REGION="${AWS_REGION}" \
-        "${ECR_URI}:${DOCKER_TAG}"
-    
-    # Wait for container to start
-    sleep 10
-    
-    # Test health endpoint
-    if curl -f http://localhost:8001/health >/dev/null 2>&1; then
-        echo "✅ Local test passed"
+    # Test CloudWatch health endpoint
+    if curl -f http://localhost:8003/cloudwatch/health >/dev/null 2>&1; then
+        echo "✅ CloudWatch health endpoint test passed"
     else
-        echo "❌ Local test failed"
-        docker logs cloudwatch-mcp-test
+        echo "⚠️ CloudWatch health endpoint test failed"
     fi
-    
-    # Cleanup test container
-    docker stop cloudwatch-mcp-test
-    docker rm cloudwatch-mcp-test
+else
+    echo "❌ Health endpoint test failed"
+    echo "📋 Container logs:"
+    docker logs cloudwatch-mcp-test
 fi
+
+# Cleanup test container
+docker stop cloudwatch-mcp-test
+docker rm cloudwatch-mcp-test
 
 # Output deployment information
 echo ""

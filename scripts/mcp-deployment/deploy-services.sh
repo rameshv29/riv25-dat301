@@ -18,6 +18,7 @@ TASK_FAMILY="${PROJECT_NAME}-${ENVIRONMENT}-cloudwatch-mcp"
 SERVICE_NAME="${PROJECT_NAME}-${ENVIRONMENT}-cloudwatch-mcp-service"
 
 # ECR Configuration
+# The enhanced template uses a different naming pattern
 ECR_REPO_NAME="${PROJECT_NAME}/${ENVIRONMENT}/cloudwatch-mcp-server"
 ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO_NAME}"
 
@@ -62,57 +63,73 @@ fi
 
 # Get CloudFormation stack outputs for required resources
 echo "🔍 Getting CloudFormation stack outputs..."
-STACK_NAME="${PROJECT_NAME}-${ENVIRONMENT}"  # Adjust if your stack name is different
+# For workshop environment, use the main workshop stack name
+WORKSHOP_STACK_NAME="ai-postgresql-workshop"
+INFRASTRUCTURE_STACK_NAME="${WORKSHOP_STACK_NAME}"
+SERVICES_STACK_NAME="${PROJECT_NAME}-${ENVIRONMENT}-services"
 
-# Try to get stack outputs
-if aws cloudformation describe-stacks --stack-name "${STACK_NAME}" --region "${AWS_REGION}" >/dev/null 2>&1; then
-    echo "📋 Found CloudFormation stack: ${STACK_NAME}"
+# Try to get stack outputs from workshop stack (which includes MCP infrastructure)
+if aws cloudformation describe-stacks --stack-name "${INFRASTRUCTURE_STACK_NAME}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+    echo "📋 Found CloudFormation workshop stack: ${INFRASTRUCTURE_STACK_NAME}"
     
-    # Get required resources from stack outputs
+    # Get required resources from infrastructure stack outputs
     EXECUTION_ROLE_ARN=$(aws cloudformation describe-stacks \
-        --stack-name "${STACK_NAME}" \
+        --stack-name "${INFRASTRUCTURE_STACK_NAME}" \
         --region "${AWS_REGION}" \
         --query 'Stacks[0].Outputs[?OutputKey==`ECSTaskExecutionRoleArn`].OutputValue' \
         --output text 2>/dev/null || echo "")
     
     TASK_ROLE_ARN=$(aws cloudformation describe-stacks \
-        --stack-name "${STACK_NAME}" \
+        --stack-name "${INFRASTRUCTURE_STACK_NAME}" \
         --region "${AWS_REGION}" \
         --query 'Stacks[0].Outputs[?OutputKey==`CloudWatchMCPTaskRoleArn`].OutputValue' \
         --output text 2>/dev/null || echo "")
     
-    LOG_GROUP=$(aws cloudformation describe-stacks \
-        --stack-name "${STACK_NAME}" \
+    VPC_ID=$(aws cloudformation describe-stacks \
+        --stack-name "${INFRASTRUCTURE_STACK_NAME}" \
         --region "${AWS_REGION}" \
-        --query 'Stacks[0].Outputs[?OutputKey==`CloudWatchMCPLogGroup`].OutputValue' \
+        --query 'Stacks[0].Outputs[?OutputKey==`VpcId`].OutputValue' \
         --output text 2>/dev/null || echo "")
     
-    PRIVATE_SUBNETS=$(aws cloudformation describe-stacks \
-        --stack-name "${STACK_NAME}" \
+    PRIVATE_SUBNET_1=$(aws cloudformation describe-stacks \
+        --stack-name "${INFRASTRUCTURE_STACK_NAME}" \
         --region "${AWS_REGION}" \
-        --query 'Stacks[0].Outputs[?OutputKey==`PrivateSubnets`].OutputValue' \
+        --query 'Stacks[0].Outputs[?OutputKey==`PrivateSubnet1Id`].OutputValue' \
+        --output text 2>/dev/null || echo "")
+    
+    PRIVATE_SUBNET_2=$(aws cloudformation describe-stacks \
+        --stack-name "${INFRASTRUCTURE_STACK_NAME}" \
+        --region "${AWS_REGION}" \
+        --query 'Stacks[0].Outputs[?OutputKey==`PrivateSubnet2Id`].OutputValue' \
         --output text 2>/dev/null || echo "")
     
     SECURITY_GROUP=$(aws cloudformation describe-stacks \
-        --stack-name "${STACK_NAME}" \
+        --stack-name "${INFRASTRUCTURE_STACK_NAME}" \
         --region "${AWS_REGION}" \
-        --query 'Stacks[0].Outputs[?OutputKey==`ECSSecurityGroup`].OutputValue' \
+        --query 'Stacks[0].Outputs[?OutputKey==`ECSSecurityGroupId`].OutputValue' \
         --output text 2>/dev/null || echo "")
     
-    TARGET_GROUP_ARN=$(aws cloudformation describe-stacks \
-        --stack-name "${STACK_NAME}" \
-        --region "${AWS_REGION}" \
-        --query 'Stacks[0].Outputs[?OutputKey==`CloudWatchMCPTargetGroupArn`].OutputValue' \
-        --output text 2>/dev/null || echo "")
+    # Combine private subnets
+    PRIVATE_SUBNETS="${PRIVATE_SUBNET_1},${PRIVATE_SUBNET_2}"
+    
+    # Try to get target group from services stack if it exists
+    if aws cloudformation describe-stacks --stack-name "${SERVICES_STACK_NAME}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+        TARGET_GROUP_ARN=$(aws cloudformation describe-stacks \
+            --stack-name "${SERVICES_STACK_NAME}" \
+            --region "${AWS_REGION}" \
+            --query 'Stacks[0].Outputs[?OutputKey==`CloudWatchMCPTargetGroupArn`].OutputValue' \
+            --output text 2>/dev/null || echo "")
+    fi
+    
 else
-    echo "⚠️ CloudFormation stack not found: ${STACK_NAME}"
+    echo "⚠️ CloudFormation infrastructure stack not found: ${INFRASTRUCTURE_STACK_NAME}"
     echo "   Will use environment variables or defaults"
 fi
 
 # Set defaults if not found in CloudFormation
 EXECUTION_ROLE_ARN=${EXECUTION_ROLE_ARN:-${ECS_EXECUTION_ROLE_ARN:-""}}
 TASK_ROLE_ARN=${TASK_ROLE_ARN:-${CLOUDWATCH_MCP_TASK_ROLE_ARN:-""}}
-LOG_GROUP=${LOG_GROUP:-"/ecs/${PROJECT_NAME}/${ENVIRONMENT}/cloudwatch-mcp"}
+LOG_GROUP="/aws/ecs/${PROJECT_NAME}-${ENVIRONMENT}-cloudwatch-mcp"
 PRIVATE_SUBNETS=${PRIVATE_SUBNETS:-${ECS_SUBNETS:-""}}
 SECURITY_GROUP=${SECURITY_GROUP:-${ECS_SECURITY_GROUP:-""}}
 TARGET_GROUP_ARN=${TARGET_GROUP_ARN:-${TARGET_GROUP_ARN:-""}}
