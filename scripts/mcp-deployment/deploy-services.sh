@@ -129,7 +129,7 @@ fi
 # Set defaults if not found in CloudFormation
 EXECUTION_ROLE_ARN=${EXECUTION_ROLE_ARN:-${ECS_EXECUTION_ROLE_ARN:-""}}
 TASK_ROLE_ARN=${TASK_ROLE_ARN:-${CLOUDWATCH_MCP_TASK_ROLE_ARN:-""}}
-LOG_GROUP="/aws/ecs/${PROJECT_NAME}-${ENVIRONMENT}-cloudwatch-mcp"
+LOG_GROUP="/ecs/${PROJECT_NAME}/${ENVIRONMENT}/cloudwatch-mcp"
 PRIVATE_SUBNETS=${PRIVATE_SUBNETS:-${ECS_SUBNETS:-""}}
 SECURITY_GROUP=${SECURITY_GROUP:-${ECS_SECURITY_GROUP:-""}}
 TARGET_GROUP_ARN=${TARGET_GROUP_ARN:-${TARGET_GROUP_ARN:-""}}
@@ -149,6 +149,16 @@ fi
 
 echo "✅ Configuration validated"
 
+# Detect architecture for task definition
+HOST_ARCH=$(uname -m)
+if [[ "${HOST_ARCH}" == "aarch64" ]] || [[ "${HOST_ARCH}" == "arm64" ]]; then
+    CPU_ARCH="ARM64"
+    echo "📋 Using ARM64 runtime platform for ECS task"
+else
+    CPU_ARCH="X86_64"
+    echo "📋 Using X86_64 runtime platform for ECS task"
+fi
+
 # Create task definition JSON
 echo "📝 Creating task definition..."
 TASK_DEF_JSON=$(cat << EOF
@@ -158,6 +168,10 @@ TASK_DEF_JSON=$(cat << EOF
     "requiresCompatibilities": ["FARGATE"],
     "cpu": "512",
     "memory": "1024",
+    "runtimePlatform": {
+        "cpuArchitecture": "${CPU_ARCH}",
+        "operatingSystemFamily": "LINUX"
+    },
     "executionRoleArn": "${EXECUTION_ROLE_ARN}",
     "taskRoleArn": "${TASK_ROLE_ARN}",
     "containerDefinitions": [
@@ -288,6 +302,59 @@ EOF
         --cli-input-json "${SERVICE_CONFIG}"
     
     echo "✅ Service created successfully"
+fi
+
+# Fix VPC endpoint security group to allow ECS access
+echo "🔧 Configuring VPC endpoint security group for CloudWatch Logs access..."
+if [ -n "${VPC_ID}" ] && [ -n "${SECURITY_GROUP}" ]; then
+    # Find CloudWatch Logs VPC endpoint
+    VPC_ENDPOINT_ID=$(aws ec2 describe-vpc-endpoints \
+        --region "${AWS_REGION}" \
+        --filters "Name=vpc-id,Values=${VPC_ID}" "Name=service-name,Values=com.amazonaws.${AWS_REGION}.logs" \
+        --query 'VpcEndpoints[0].VpcEndpointId' \
+        --output text 2>/dev/null || echo "None")
+    
+    if [ "${VPC_ENDPOINT_ID}" != "None" ] && [ "${VPC_ENDPOINT_ID}" != "" ]; then
+        echo "📋 Found CloudWatch Logs VPC endpoint: ${VPC_ENDPOINT_ID}"
+        
+        # Get VPC endpoint security group
+        VPC_ENDPOINT_SG=$(aws ec2 describe-vpc-endpoints \
+            --region "${AWS_REGION}" \
+            --vpc-endpoint-ids "${VPC_ENDPOINT_ID}" \
+            --query 'VpcEndpoints[0].Groups[0].GroupId' \
+            --output text 2>/dev/null || echo "")
+        
+        if [ -n "${VPC_ENDPOINT_SG}" ]; then
+            echo "📋 VPC endpoint security group: ${VPC_ENDPOINT_SG}"
+            
+            # Check if rule already exists
+            EXISTING_RULE=$(aws ec2 describe-security-groups \
+                --region "${AWS_REGION}" \
+                --group-ids "${VPC_ENDPOINT_SG}" \
+                --query "SecurityGroups[0].IpPermissions[?FromPort==\`443\` && ToPort==\`443\` && IpProtocol==\`tcp\` && UserIdGroupPairs[?GroupId==\`${SECURITY_GROUP}\`]]" \
+                --output text 2>/dev/null || echo "")
+            
+            if [ -z "${EXISTING_RULE}" ]; then
+                echo "🔧 Adding ECS security group to VPC endpoint security group..."
+                aws ec2 authorize-security-group-ingress \
+                    --region "${AWS_REGION}" \
+                    --group-id "${VPC_ENDPOINT_SG}" \
+                    --protocol tcp \
+                    --port 443 \
+                    --source-group "${SECURITY_GROUP}" \
+                    2>/dev/null && echo "✅ Security group rule added successfully" || echo "⚠️ Security group rule may already exist"
+            else
+                echo "✅ Security group rule already exists"
+            fi
+        else
+            echo "⚠️ Could not find VPC endpoint security group"
+        fi
+    else
+        echo "⚠️ CloudWatch Logs VPC endpoint not found in VPC ${VPC_ID}"
+        echo "   ECS tasks may not be able to send logs to CloudWatch"
+    fi
+else
+    echo "⚠️ VPC ID or ECS Security Group not available, skipping VPC endpoint configuration"
 fi
 
 # Wait for service to stabilize

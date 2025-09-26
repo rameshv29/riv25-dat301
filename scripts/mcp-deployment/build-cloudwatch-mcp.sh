@@ -65,10 +65,20 @@ else
     echo "✅ ECR repository exists: ${ECR_REPO_NAME}"
 fi
 
-# Build Docker image using HTTP Dockerfile with correct platform for ECS Fargate
-echo "🔨 Building Docker image for linux/amd64 platform..."
+# Build Docker image for native platform (ECS Fargate supports both ARM64 and AMD64)
+HOST_ARCH=$(uname -m)
+echo "🔍 Detected host architecture: ${HOST_ARCH}"
+
+if [[ "${HOST_ARCH}" == "aarch64" ]] || [[ "${HOST_ARCH}" == "arm64" ]]; then
+    echo "🔨 Building Docker image for linux/arm64 platform (native)..."
+    PLATFORM="linux/arm64"
+else
+    echo "🔨 Building Docker image for linux/amd64 platform (native)..."
+    PLATFORM="linux/amd64"
+fi
+
 docker build \
-    --platform linux/amd64 \
+    --platform "${PLATFORM}" \
     --file "${MCP_DIR}/Dockerfile.http" \
     --tag "cloudwatch-mcp-server:${DOCKER_TAG}" \
     --tag "cloudwatch-mcp-server:${BUILD_TIMESTAMP}" \
