@@ -9,7 +9,7 @@ from typing import Optional
 import boto3
 import psycopg
 from psycopg import sql
-from psycopg.pool import ConnectionPool
+from psycopg_pool import ConnectionPool
 from loguru import logger
 
 

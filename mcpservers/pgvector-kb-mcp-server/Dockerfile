@@ -8,16 +8,17 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv for fast Python package management
 RUN pip install uv
 
 # Copy project files
-COPY pyproject.toml uv.lock* ./
+COPY pyproject.toml ./
 
 # Install dependencies using uv
-RUN uv sync --frozen --no-dev
+RUN uv sync --no-dev
 
 # Copy source code
 COPY awslabs/ ./awslabs/
