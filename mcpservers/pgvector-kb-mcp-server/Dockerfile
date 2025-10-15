@@ -1,5 +1,5 @@
 # Use Python 3.11 slim image
-FROM python:3.11-slim
+FROM public.ecr.aws/docker/library/python:3.11-slim@sha256:ad48727987b259854d52241fac3bc633574364867b8e20aec305e6e7f4028b26
 
 # Set working directory
 WORKDIR /app
