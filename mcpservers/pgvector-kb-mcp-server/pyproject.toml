@@ -37,6 +37,9 @@ dev = [
 [project.scripts]
 pgvector-kb-mcp-server = "awslabs.pgvector_kb_mcp_server.server:main"
 
+[tool.hatch.build.targets.wheel]
+packages = ["awslabs"]
+
 [tool.ruff]
 line-length = 99
 target-version = "py310"
