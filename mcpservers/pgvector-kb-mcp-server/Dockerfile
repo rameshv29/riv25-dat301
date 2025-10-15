@@ -14,21 +14,30 @@ RUN apt-get update && apt-get install -y \
 # Install uv for fast Python package management
 RUN pip install uv
 
-# Copy project files
-COPY pyproject.toml ./
+# Create non-root user first
+RUN useradd --create-home --shell /bin/bash app
+
+# Change ownership of the app directory
+RUN chown -R app:app /app
+
+# Copy project files and set ownership
+COPY --chown=app:app pyproject.toml ./
+
+# Switch to app user for dependency installation
+USER app
 
 # Install dependencies using uv
 RUN uv sync --no-dev
 
-# Copy source code
-COPY awslabs/ ./awslabs/
+# Copy source code with proper ownership
+COPY --chown=app:app awslabs/ ./awslabs/
 
-# Copy health check script
+# Switch back to root to copy health check script
+USER root
 COPY docker-healthcheck.sh /docker-healthcheck.sh
 RUN chmod +x /docker-healthcheck.sh
 
-# Create non-root user
-RUN useradd --create-home --shell /bin/bash app
+# Switch back to app user for runtime
 USER app
 
 # Set environment variables
