@@ -7,14 +7,13 @@ cd /workshop
 curl -LsSf https://astral.sh/uv/install.sh | sh
 export PATH="/root/.cargo/bin:$PATH"
 
-# Create virtual environment as ec2-user
-sudo -u ec2-user bash << 'EOF'
-cd /workshop
-export PYENV_ROOT="$HOME/.pyenv"
+# Set up Python environment
+export PYENV_ROOT="/root/.pyenv"
 export PATH="$PYENV_ROOT/bin:$PATH"
 eval "$(pyenv init -)"
 
-# Create virtual environment
+# Create virtual environment in /workshop
+cd /workshop
 python -m venv .venv
 source .venv/bin/activate
 
@@ -24,7 +23,9 @@ pip install streamlit boto3 psycopg2-binary pydantic fastapi uvicorn python-jose
 
 # Install MCP servers
 pip install postgres-mcp-server cloudwatch-mcp-server
-EOF
+
+# Set ownership to ec2-user
+chown -R ec2-user:ec2-user /workshop/.venv
 
 # Install MCP servers globally with uv (fallback)
 if [ -f /root/.cargo/bin/uv ]; then

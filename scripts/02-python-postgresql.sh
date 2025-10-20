@@ -24,26 +24,30 @@ echo 'export PATH="/usr/pgsql-16/bin:$PATH"' >> /home/ec2-user/.bashrc
 echo 'export PATH="/usr/pgsql-16/bin:$PATH"' >> /root/.bashrc
 export PATH="/usr/pgsql-16/bin:$PATH"
 
-# Install pyenv
-if [ ! -d "/home/ec2-user/.pyenv" ]; then
+# Install pyenv as root first
+export HOME=/root
+if [ ! -d "/root/.pyenv" ]; then
     curl https://pyenv.run | bash
-    chown -R ec2-user:ec2-user /home/ec2-user/.pyenv
 fi
+
+# Configure pyenv environment
+export PYENV_ROOT="/root/.pyenv"
+export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init -)"
+
+# Install Python 3.11.13
+pyenv install 3.11.13
+pyenv global 3.11.13
+
+# Copy pyenv to ec2-user and set ownership
+cp -r /root/.pyenv /home/ec2-user/
+chown -R ec2-user:ec2-user /home/ec2-user/.pyenv
 
 # Configure pyenv for ec2-user
 cat >> /home/ec2-user/.bashrc << 'EOF'
 export PYENV_ROOT="$HOME/.pyenv"
 export PATH="$PYENV_ROOT/bin:$PATH"
 eval "$(pyenv init -)"
-EOF
-
-# Install Python 3.11.13 as ec2-user
-sudo -u ec2-user bash << 'EOF'
-export PYENV_ROOT="$HOME/.pyenv"
-export PATH="$PYENV_ROOT/bin:$PATH"
-eval "$(pyenv init -)"
-pyenv install 3.11.13
-pyenv global 3.11.13
 EOF
 
 echo "✅ Python 3.11.13 and PostgreSQL setup completed"

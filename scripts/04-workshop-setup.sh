@@ -7,27 +7,40 @@ cd /workshop
 git clone ${GITHUB_REPO_URL} .
 git checkout ${GITHUB_BRANCH} || git checkout main || echo "Using default branch"
 
-# Download mahavat-agent.zip from S3
-echo "Downloading mahavat-agent.zip from workshop assets..."
-aws s3 cp s3://${ASSETS_BUCKET_NAME}/${ASSETS_BUCKET_PREFIX}mahavat-agent.zip /tmp/mahavat-agent.zip --region ${AWS_REGION}
-if [ -f /tmp/mahavat-agent.zip ]; then
-    echo "Extracting mahavat-agent.zip to /workshop/mahavat-agent/"
-    mkdir -p /workshop/mahavat-agent
-    cd /workshop/mahavat-agent
-    unzip -q /tmp/mahavat-agent.zip
-    echo "mahavat-agent.zip extracted successfully"
-    cd /workshop
+# Download mahavat-agent.zip from S3 (only if variables are set)
+if [ -n "${ASSETS_BUCKET_NAME}" ] && [ -n "${AWS_REGION}" ]; then
+    echo "Downloading mahavat-agent.zip from workshop assets..."
+    aws s3 cp "s3://${ASSETS_BUCKET_NAME}/${ASSETS_BUCKET_PREFIX}mahavat-agent.zip" /tmp/mahavat-agent.zip --region "${AWS_REGION}"
+    if [ -f /tmp/mahavat-agent.zip ]; then
+        echo "Extracting mahavat-agent.zip to /workshop/mahavat-agent/"
+        mkdir -p /workshop/mahavat-agent
+        cd /workshop/mahavat-agent
+        unzip -q /tmp/mahavat-agent.zip
+        echo "mahavat-agent.zip extracted successfully"
+        cd /workshop
+    else
+        echo "Warning: mahavat-agent.zip not found in S3 bucket"
+    fi
 else
-    echo "Warning: mahavat-agent.zip not found in S3 bucket"
+    echo "Skipping mahavat-agent download - S3 variables not set"
 fi
 
-# Get CloudFormation outputs
-echo "Getting database information from CloudFormation stacks..."
-DB_ENDPOINT=$(aws cloudformation describe-stacks --stack-name "${WORKSHOP_STACK_NAME}" --region ${AWS_REGION} --query 'Stacks[0].Outputs[?OutputKey==`DatabaseEndpoint`].OutputValue' --output text)
-DB_SECRET_ARN=$(aws cloudformation describe-stacks --stack-name "${WORKSHOP_STACK_NAME}" --region ${AWS_REGION} --query 'Stacks[0].Outputs[?OutputKey==`DatabaseSecretArn`].OutputValue' --output text)
-DB_CLUSTER_ARN="arn:aws:rds:${AWS_REGION}:${AWS_ACCOUNT_ID}:cluster:$(echo $DB_ENDPOINT | cut -d'.' -f1)"
-COGNITO_USER_POOL_ID=$(aws cloudformation describe-stacks --stack-name "${WORKSHOP_STACK_NAME}" --region ${AWS_REGION} --query 'Stacks[0].Outputs[?OutputKey==`CognitoUserPoolId`].OutputValue' --output text)
-COGNITO_CLIENT_ID=$(aws cloudformation describe-stacks --stack-name "${WORKSHOP_STACK_NAME}" --region ${AWS_REGION} --query 'Stacks[0].Outputs[?OutputKey==`CognitoClientId`].OutputValue' --output text)
+# Get CloudFormation outputs (only if variables are set)
+if [ -n "${WORKSHOP_STACK_NAME}" ] && [ -n "${AWS_REGION}" ]; then
+    echo "Getting database information from CloudFormation stacks..."
+    DB_ENDPOINT=$(aws cloudformation describe-stacks --stack-name "${WORKSHOP_STACK_NAME}" --region "${AWS_REGION}" --query 'Stacks[0].Outputs[?OutputKey==`DatabaseEndpoint`].OutputValue' --output text 2>/dev/null || echo "")
+    DB_SECRET_ARN=$(aws cloudformation describe-stacks --stack-name "${WORKSHOP_STACK_NAME}" --region "${AWS_REGION}" --query 'Stacks[0].Outputs[?OutputKey==`DatabaseSecretArn`].OutputValue' --output text 2>/dev/null || echo "")
+    DB_CLUSTER_ARN="arn:aws:rds:${AWS_REGION}:${AWS_ACCOUNT_ID}:cluster:$(echo $DB_ENDPOINT | cut -d'.' -f1)"
+    COGNITO_USER_POOL_ID=$(aws cloudformation describe-stacks --stack-name "${WORKSHOP_STACK_NAME}" --region "${AWS_REGION}" --query 'Stacks[0].Outputs[?OutputKey==`CognitoUserPoolId`].OutputValue' --output text 2>/dev/null || echo "")
+    COGNITO_CLIENT_ID=$(aws cloudformation describe-stacks --stack-name "${WORKSHOP_STACK_NAME}" --region "${AWS_REGION}" --query 'Stacks[0].Outputs[?OutputKey==`CognitoClientId`].OutputValue' --output text 2>/dev/null || echo "")
+else
+    echo "Skipping CloudFormation queries - stack variables not set"
+    DB_ENDPOINT="localhost"
+    DB_SECRET_ARN=""
+    DB_CLUSTER_ARN=""
+    COGNITO_USER_POOL_ID=""
+    COGNITO_CLIENT_ID=""
+fi
 
 # Create .env file
 cat > /workshop/.env << EOF
