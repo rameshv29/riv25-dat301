@@ -1,5 +1,8 @@
 #!/bin/bash
-echo "🐍 DAT301 Workshop - Python 3.11.13 + PostgreSQL Setup"
+echo "🐍 DAT301 Workshop - Python 3.11.13 + PostgreSQL Setup (Safe Mode)"
+
+# IMPORTANT: Keep system Python (3.9) untouched for dnf/yum
+echo "📋 System Python will remain: $(python3 --version)"
 
 # Install build dependencies
 dnf install -y \
@@ -19,35 +22,45 @@ dnf install -y \
 # Install PostgreSQL 16
 dnf install -y postgresql16-server postgresql16 postgresql16-devel postgresql16-contrib
 
-# Add pg_config to PATH
+# Add pg_config to PATH for ec2-user only (not system-wide)
 echo 'export PATH="/usr/pgsql-16/bin:$PATH"' >> /home/ec2-user/.bashrc
-echo 'export PATH="/usr/pgsql-16/bin:$PATH"' >> /root/.bashrc
-export PATH="/usr/pgsql-16/bin:$PATH"
 
-# Install pyenv as root first
-export HOME=/root
-if [ ! -d "/root/.pyenv" ]; then
+# Install pyenv for ec2-user only (user-space installation)
+sudo -u ec2-user bash << 'EOF'
+cd /home/ec2-user
+
+# Install pyenv in user directory
+if [ ! -d "$HOME/.pyenv" ]; then
     curl https://pyenv.run | bash
 fi
 
-# Configure pyenv environment
-export PYENV_ROOT="/root/.pyenv"
-export PATH="$PYENV_ROOT/bin:$PATH"
-eval "$(pyenv init -)"
-
-# Install Python 3.11.13
-pyenv install 3.11.13
-pyenv global 3.11.13
-
-# Copy pyenv to ec2-user and set ownership
-cp -r /root/.pyenv /home/ec2-user/
-chown -R ec2-user:ec2-user /home/ec2-user/.pyenv
-
-# Configure pyenv for ec2-user
-cat >> /home/ec2-user/.bashrc << 'EOF'
+# Configure pyenv for this user only
+cat >> ~/.bashrc << 'PYENV_EOF'
+# Pyenv configuration (user-only, does not affect system Python)
 export PYENV_ROOT="$HOME/.pyenv"
 export PATH="$PYENV_ROOT/bin:$PATH"
 eval "$(pyenv init -)"
+PYENV_EOF
+
+# Load pyenv for current session
+export PYENV_ROOT="$HOME/.pyenv"
+export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init -)"
+
+# Install Python 3.11.13 (user-only)
+pyenv install 3.11.13
+
+# Set local Python version for workshop directory
+mkdir -p /workshop
+cd /workshop
+pyenv local 3.11.13
+
+echo "✅ Python 3.11.13 installed for user ec2-user only"
 EOF
 
-echo "✅ Python 3.11.13 and PostgreSQL setup completed"
+# Verify system Python is still intact
+echo "🔍 Verification:"
+echo "System Python: $(/usr/bin/python3 --version)"
+echo "DNF status: $(dnf --version | head -1)"
+
+echo "✅ Python 3.11.13 and PostgreSQL setup completed safely"

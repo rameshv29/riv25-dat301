@@ -35,7 +35,9 @@ After=network.target
 Type=simple
 User=ec2-user
 WorkingDirectory=/workshop
-Environment=PATH=/home/ec2-user/.pyenv/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PYENV_ROOT=/home/ec2-user/.pyenv
+Environment=PATH=/home/ec2-user/.pyenv/bin:/home/ec2-user/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStartPre=/bin/bash -c 'eval "$(pyenv init -)"'
 ExecStart=/usr/bin/code-server --bind-addr 0.0.0.0:8080 --auth password
 Restart=always
 RestartSec=10

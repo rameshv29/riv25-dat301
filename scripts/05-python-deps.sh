@@ -1,21 +1,32 @@
 #!/bin/bash
-echo "📦 DAT301 Workshop - Python Dependencies Setup"
+echo "📦 DAT301 Workshop - Python Dependencies Setup (Safe Mode)"
 
+# Install uv for ec2-user (not root)
+sudo -u ec2-user bash << 'EOF'
+cd /home/ec2-user
+curl -LsSf https://astral.sh/uv/install.sh | sh
+EOF
+
+# Set up Python environment as ec2-user
+sudo -u ec2-user bash << 'EOF'
 cd /workshop
 
-# Install uv (Python package manager)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-export PATH="/root/.cargo/bin:$PATH"
-
-# Set up Python environment
-export PYENV_ROOT="/root/.pyenv"
+# Load pyenv environment
+export PYENV_ROOT="$HOME/.pyenv"
 export PATH="$PYENV_ROOT/bin:$PATH"
 eval "$(pyenv init -)"
 
-# Create virtual environment in /workshop
-cd /workshop
+# Verify we're using the right Python
+echo "Using Python: $(python --version)"
+echo "Python path: $(which python)"
+
+# Create virtual environment with pyenv Python 3.11.13
 python -m venv .venv
 source .venv/bin/activate
+
+# Verify virtual environment
+echo "Venv Python: $(python --version)"
+echo "Venv pip: $(which pip)"
 
 # Install core dependencies
 pip install --upgrade pip
@@ -24,13 +35,16 @@ pip install streamlit boto3 psycopg2-binary pydantic fastapi uvicorn python-jose
 # Install MCP servers
 pip install postgres-mcp-server cloudwatch-mcp-server
 
-# Set ownership to ec2-user
-chown -R ec2-user:ec2-user /workshop/.venv
+echo "✅ Virtual environment created with Python 3.11.13"
+EOF
 
-# Install MCP servers globally with uv (fallback)
-if [ -f /root/.cargo/bin/uv ]; then
-    /root/.cargo/bin/uv tool install postgres-mcp-server || echo "MCP server already installed"
-    /root/.cargo/bin/uv tool install cloudwatch-mcp-server || echo "MCP server already installed"
+# Install MCP servers globally with uv for ec2-user
+sudo -u ec2-user bash << 'EOF'
+export PATH="$HOME/.local/bin:$PATH"
+if [ -f "$HOME/.local/bin/uv" ]; then
+    uv tool install postgres-mcp-server || echo "MCP server install failed, but available in venv"
+    uv tool install cloudwatch-mcp-server || echo "MCP server install failed, but available in venv"
 fi
+EOF
 
-echo "✅ Python dependencies setup completed"
+echo "✅ Python dependencies setup completed safely"
