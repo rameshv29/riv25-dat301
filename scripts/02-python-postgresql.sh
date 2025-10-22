@@ -25,6 +25,10 @@ dnf install -y postgresql16-server postgresql16 postgresql16-devel postgresql16-
 # Add pg_config to PATH for ec2-user only (not system-wide)
 echo 'export PATH="/usr/pgsql-16/bin:$PATH"' >> /home/ec2-user/.bashrc
 
+# Create workshop directory first
+mkdir -p /workshop
+chown ec2-user:ec2-user /workshop
+
 # Install pyenv for ec2-user only (user-space installation)
 sudo -u ec2-user bash << 'EOF'
 cd /home/ec2-user
@@ -34,13 +38,15 @@ if [ ! -d "$HOME/.pyenv" ]; then
     curl https://pyenv.run | bash
 fi
 
-# Configure pyenv for this user only
-cat >> ~/.bashrc << 'PYENV_EOF'
+# Configure pyenv for this user only (avoid duplicates)
+if ! grep -q "PYENV_ROOT" ~/.bashrc; then
+    cat >> ~/.bashrc << 'PYENV_EOF'
 # Pyenv configuration (user-only, does not affect system Python)
 export PYENV_ROOT="$HOME/.pyenv"
 export PATH="$PYENV_ROOT/bin:$PATH"
 eval "$(pyenv init -)"
 PYENV_EOF
+fi
 
 # Load pyenv for current session
 export PYENV_ROOT="$HOME/.pyenv"
@@ -48,10 +54,9 @@ export PATH="$PYENV_ROOT/bin:$PATH"
 eval "$(pyenv init -)"
 
 # Install Python 3.11.13 (user-only)
-pyenv install 3.11.13
+pyenv install 3.11.13 || echo "Python 3.11.13 already installed"
 
 # Set local Python version for workshop directory
-mkdir -p /workshop
 cd /workshop
 pyenv local 3.11.13
 

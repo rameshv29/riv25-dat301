@@ -30,69 +30,89 @@ find_stack_by_pattern() {
 
 # Discover workshop stacks
 echo "📋 Searching for workshop stacks..."
-WORKSHOP_MAIN_STACK=$(find_stack_by_pattern "dat301")
-if [ -z "$WORKSHOP_MAIN_STACK" ]; then
-    WORKSHOP_MAIN_STACK=$(find_stack_by_pattern "DAT301")
-fi
-if [ -z "$WORKSHOP_MAIN_STACK" ]; then
-    WORKSHOP_MAIN_STACK=$(find_stack_by_pattern "workshop")
-fi
+DATABASE_STACK=$(find_stack_by_pattern "DatabaseStack")
+COGNITO_STACK=$(find_stack_by_pattern "CognitoStack")
 
-echo "🎯 Found main stack: ${WORKSHOP_MAIN_STACK:-'Not found'}"
+echo "🎯 Found Database stack: ${DATABASE_STACK:-'Not found'}"
+echo "🎯 Found Cognito stack: ${COGNITO_STACK:-'Not found'}"
 
-# Get stack outputs if stack found
-if [ -n "$WORKSHOP_MAIN_STACK" ]; then
-    echo "📊 Extracting stack outputs..."
-    
-    DB_ENDPOINT=$(get_stack_output "$WORKSHOP_MAIN_STACK" "DatabaseEndpoint")
-    DB_SECRET_ARN=$(get_stack_output "$WORKSHOP_MAIN_STACK" "DatabaseSecretArn")
-    COGNITO_USER_POOL_ID=$(get_stack_output "$WORKSHOP_MAIN_STACK" "CognitoUserPoolId")
-    COGNITO_CLIENT_ID=$(get_stack_output "$WORKSHOP_MAIN_STACK" "CognitoClientId")
-    
-    # Try alternative output key names
-    if [ -z "$DB_ENDPOINT" ]; then
-        DB_ENDPOINT=$(get_stack_output "$WORKSHOP_MAIN_STACK" "RDSEndpoint")
-    fi
-    if [ -z "$DB_SECRET_ARN" ]; then
-        DB_SECRET_ARN=$(get_stack_output "$WORKSHOP_MAIN_STACK" "DatabaseSecret")
-    fi
-    
-    # Construct cluster ARN if we have endpoint
-    if [ -n "$DB_ENDPOINT" ]; then
-        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null)
-        CLUSTER_NAME=$(echo "$DB_ENDPOINT" | cut -d'.' -f1)
-        DB_CLUSTER_ARN="arn:aws:rds:$AWS_REGION:$ACCOUNT_ID:cluster:$CLUSTER_NAME"
-    fi
-    
-    echo "✅ Stack outputs discovered:"
-    echo "   Database Endpoint: ${DB_ENDPOINT:-'Not found'}"
-    echo "   Database Secret: ${DB_SECRET_ARN:-'Not found'}"
-    echo "   Cognito User Pool: ${COGNITO_USER_POOL_ID:-'Not found'}"
-    echo "   Cognito Client: ${COGNITO_CLIENT_ID:-'Not found'}"
+# Get database outputs
+if [ -n "$DATABASE_STACK" ]; then
+    echo "📊 Extracting database outputs..."
+    DB_ENDPOINT=$(get_stack_output "$DATABASE_STACK" "DBEndpoint")
+    DB_SECRET_ARN=$(get_stack_output "$DATABASE_STACK" "DBSecretArn")
+    DB_CLUSTER_ARN=$(get_stack_output "$DATABASE_STACK" "DBClusterArn")
+    DB_CLUSTER_ID=$(get_stack_output "$DATABASE_STACK" "DBClusterIdentifier")
+    DB_PORT=$(get_stack_output "$DATABASE_STACK" "DBPort")
+    ENGINE_VERSION=$(get_stack_output "$DATABASE_STACK" "EngineVersion")
 else
-    echo "⚠️  No workshop stack found, using defaults"
+    echo "⚠️  Database stack not found"
     DB_ENDPOINT="localhost"
     DB_SECRET_ARN=""
     DB_CLUSTER_ARN=""
+    DB_CLUSTER_ID=""
+    DB_PORT="5432"
+    ENGINE_VERSION=""
+fi
+
+# Get Cognito outputs
+if [ -n "$COGNITO_STACK" ]; then
+    echo "📊 Extracting Cognito outputs..."
+    COGNITO_USER_POOL_ID=$(get_stack_output "$COGNITO_STACK" "UserPoolId")
+    COGNITO_CLIENT_ID=$(get_stack_output "$COGNITO_STACK" "ClientId")
+    COGNITO_IDENTITY_POOL_ID=$(get_stack_output "$COGNITO_STACK" "IdentityPoolId")
+    ADMIN_USERNAME=$(get_stack_output "$COGNITO_STACK" "AdminUsername")
+    READONLY_USERNAME=$(get_stack_output "$COGNITO_STACK" "ReadonlyUsername")
+    DEFAULT_PASSWORD=$(get_stack_output "$COGNITO_STACK" "DefaultPassword")
+else
+    echo "⚠️  Cognito stack not found"
     COGNITO_USER_POOL_ID=""
     COGNITO_CLIENT_ID=""
+    COGNITO_IDENTITY_POOL_ID=""
+    ADMIN_USERNAME="admin"
+    READONLY_USERNAME="readonly"
+    DEFAULT_PASSWORD="TempPass123!"
 fi
+
+echo "✅ Stack outputs discovered:"
+echo "   Database Endpoint: ${DB_ENDPOINT:-'Not found'}"
+echo "   Database Secret: ${DB_SECRET_ARN:-'Not found'}"
+echo "   Database Cluster: ${DB_CLUSTER_ID:-'Not found'}"
+echo "   Cognito User Pool: ${COGNITO_USER_POOL_ID:-'Not found'}"
+echo "   Cognito Client: ${COGNITO_CLIENT_ID:-'Not found'}"
 
 # Create environment configuration
 cat > /workshop/.env << EOF
-# DAT301 Workshop Environment Variables (Auto-discovered)
+# DAT301 Workshop Environment Variables (Auto-discovered from CloudFormation)
 AWS_REGION=$AWS_REGION
 AWS_DEFAULT_REGION=$AWS_REGION
+
+# Database Configuration
+DATABASE_ENDPOINT=${DB_ENDPOINT:-localhost}
+DATABASE_PORT=${DB_PORT:-5432}
+DATABASE_NAME=workshop_db
+DB_CLUSTER_IDENTIFIER=${DB_CLUSTER_ID:-}
+DB_CLUSTER_ARN=${DB_CLUSTER_ARN:-}
+DB_SECRET_ARN=${DB_SECRET_ARN:-}
+ENGINE_VERSION=${ENGINE_VERSION:-}
+
+# Legacy aliases for compatibility
 RDS_CLUSTER_ARN=${DB_CLUSTER_ARN:-}
 RDS_SECRET_ARN=${DB_SECRET_ARN:-}
-DATABASE_NAME=workshop_db
-DATABASE_ENDPOINT=${DB_ENDPOINT:-localhost}
-DATABASE_PORT=5432
 DATABASE_SECRET_ARN=${DB_SECRET_ARN:-}
 HOST=${DB_ENDPOINT:-localhost}
+
+# Cognito Configuration
 COGNITO_USER_POOL_ID=${COGNITO_USER_POOL_ID:-}
 COGNITO_CLIENT_ID=${COGNITO_CLIENT_ID:-}
-WORKSHOP_STACK_NAME=${WORKSHOP_MAIN_STACK:-}
+COGNITO_IDENTITY_POOL_ID=${COGNITO_IDENTITY_POOL_ID:-}
+ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+READONLY_USERNAME=${READONLY_USERNAME:-readonly}
+DEFAULT_PASSWORD=${DEFAULT_PASSWORD:-TempPass123!}
+
+# Stack Information
+DATABASE_STACK_NAME=${DATABASE_STACK:-}
+COGNITO_STACK_NAME=${COGNITO_STACK:-}
 EOF
 
 # Set up environment variables for ec2-user
@@ -101,16 +121,27 @@ cat >> /home/ec2-user/.bashrc << EOF
 # DAT301 Workshop Environment Variables (Auto-discovered)
 export AWS_REGION="$AWS_REGION"
 export AWS_DEFAULT_REGION="$AWS_REGION"
+
+# Database Configuration
+export DATABASE_ENDPOINT="${DB_ENDPOINT:-localhost}"
+export DATABASE_PORT="${DB_PORT:-5432}"
+export DATABASE_NAME=workshop_db
+export DB_CLUSTER_IDENTIFIER="${DB_CLUSTER_ID:-}"
+export DB_CLUSTER_ARN="${DB_CLUSTER_ARN:-}"
+export DB_SECRET_ARN="${DB_SECRET_ARN:-}"
+
+# Legacy aliases
 export RDS_CLUSTER_ARN="${DB_CLUSTER_ARN:-}"
 export RDS_SECRET_ARN="${DB_SECRET_ARN:-}"
-export DATABASE_NAME=workshop_db
-export DATABASE_ENDPOINT="${DB_ENDPOINT:-localhost}"
-export DATABASE_PORT=5432
 export DATABASE_SECRET_ARN="${DB_SECRET_ARN:-}"
 export HOST="${DB_ENDPOINT:-localhost}"
+
+# Cognito Configuration
 export COGNITO_USER_POOL_ID="${COGNITO_USER_POOL_ID:-}"
 export COGNITO_CLIENT_ID="${COGNITO_CLIENT_ID:-}"
-export WORKSHOP_STACK_NAME="${WORKSHOP_MAIN_STACK:-}"
+export COGNITO_IDENTITY_POOL_ID="${COGNITO_IDENTITY_POOL_ID:-}"
+export ADMIN_USERNAME="${ADMIN_USERNAME:-admin}"
+export READONLY_USERNAME="${READONLY_USERNAME:-readonly}"
 
 # Workshop shortcuts
 alias workshop-env='env | grep -E "(AWS_|RDS_|DATABASE_|HOST|COGNITO_|WORKSHOP_)" | sort'
