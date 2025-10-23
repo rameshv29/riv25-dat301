@@ -30,7 +30,7 @@ find_stack_by_pattern() {
 
 # Discover workshop stacks
 echo "📋 Searching for workshop stacks..."
-DATABASE_STACK=$(find_stack_by_pattern "DatabaseStack")
+DATABASE_STACK=$(find_stack_by_pattern "stack-DatabaseStack")
 COGNITO_STACK=$(find_stack_by_pattern "CognitoStack")
 
 echo "🎯 Found Database stack: ${DATABASE_STACK:-'Not found'}"
