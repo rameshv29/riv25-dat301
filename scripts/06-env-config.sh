@@ -1,71 +1,67 @@
 #!/bin/bash
-echo "🔧 DAT301 Workshop - Environment Configuration with CloudFormation Discovery"
+echo "🔧 DAT301 Workshop - Environment Configuration from Main Stack"
 
 # Set default region
 AWS_REGION="${AWS_REGION:-us-west-2}"
 export AWS_DEFAULT_REGION="$AWS_REGION"
 
-echo "🔍 Discovering CloudFormation stacks in region: $AWS_REGION"
+# Get main stack name from environment (passed from CloudFormation UserData)
+MAIN_STACK_NAME="${WORKSHOP_STACK_NAME:-}"
 
-# Function to get stack output
+if [ -z "$MAIN_STACK_NAME" ]; then
+    echo "⚠️  WORKSHOP_STACK_NAME not set, trying to discover main stack..."
+    MAIN_STACK_NAME=$(aws cloudformation list-stacks \
+        --region "$AWS_REGION" \
+        --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE \
+        --query "StackSummaries[?contains(StackName, 'dat301-reinvent-main')].StackName" \
+        --output text 2>/dev/null | head -1)
+fi
+
+echo "🔍 Using main stack: ${MAIN_STACK_NAME:-'Not found'}"
+
+# Function to get stack output from main stack
 get_stack_output() {
-    local stack_name="$1"
-    local output_key="$2"
+    local output_key="$1"
     aws cloudformation describe-stacks \
-        --stack-name "$stack_name" \
+        --stack-name "$MAIN_STACK_NAME" \
         --region "$AWS_REGION" \
         --query "Stacks[0].Outputs[?OutputKey=='$output_key'].OutputValue" \
         --output text 2>/dev/null || echo ""
 }
 
-# Function to find stacks by pattern
-find_stack_by_pattern() {
-    local pattern="$1"
-    aws cloudformation list-stacks \
-        --region "$AWS_REGION" \
-        --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE \
-        --query "StackSummaries[?contains(StackName, '$pattern')].StackName" \
-        --output text 2>/dev/null | head -1
-}
-
-# Discover workshop stacks
-echo "📋 Searching for workshop stacks..."
-DATABASE_STACK=$(find_stack_by_pattern "stack-DatabaseStack")
-COGNITO_STACK=$(find_stack_by_pattern "CognitoStack")
-
-echo "🎯 Found Database stack: ${DATABASE_STACK:-'Not found'}"
-echo "🎯 Found Cognito stack: ${COGNITO_STACK:-'Not found'}"
-
-# Get database outputs
-if [ -n "$DATABASE_STACK" ]; then
-    echo "📊 Extracting database outputs..."
-    DB_ENDPOINT=$(get_stack_output "$DATABASE_STACK" "DBEndpoint")
-    DB_SECRET_ARN=$(get_stack_output "$DATABASE_STACK" "DBSecretArn")
-    DB_CLUSTER_ARN=$(get_stack_output "$DATABASE_STACK" "DBClusterArn")
-    DB_CLUSTER_ID=$(get_stack_output "$DATABASE_STACK" "DBClusterIdentifier")
-    DB_PORT=$(get_stack_output "$DATABASE_STACK" "DBPort")
-    ENGINE_VERSION=$(get_stack_output "$DATABASE_STACK" "EngineVersion")
+# Get database outputs from MAIN stack (not nested DatabaseStack)
+if [ -n "$MAIN_STACK_NAME" ]; then
+    echo "📊 Extracting outputs from main stack..."
+    
+    # Database outputs
+    DB_ENDPOINT=$(get_stack_output "DatabaseEndpoint")
+    DB_SECRET_ARN=$(get_stack_output "DatabaseSecretArn")
+    DB_CLUSTER_ID=$(get_stack_output "DBClusterIdentifier")
+    DB_PORT=$(get_stack_output "DBPort")
+    ENGINE_VERSION=$(get_stack_output "EngineVersion")
+    
+    # Construct cluster ARN if we have cluster ID
+    if [ -n "$DB_CLUSTER_ID" ]; then
+        DB_CLUSTER_ARN="arn:aws:rds:${AWS_REGION}:${AWS_ACCOUNT_ID:-$(aws sts get-caller-identity --query Account --output text)}:cluster:${DB_CLUSTER_ID}"
+    else
+        DB_CLUSTER_ARN=""
+    fi
+    
+    # Cognito outputs
+    COGNITO_USER_POOL_ID=$(get_stack_output "CognitoUserPoolId")
+    COGNITO_CLIENT_ID=$(get_stack_output "CognitoClientId")
+    COGNITO_IDENTITY_POOL_ID=$(get_stack_output "CognitoIdentityPoolId")
+    ADMIN_USERNAME=$(get_stack_output "AdminUsername")
+    READONLY_USERNAME=$(get_stack_output "ReadonlyUsername")
+    DEFAULT_PASSWORD=$(get_stack_output "DefaultPassword")
 else
-    echo "⚠️  Database stack not found"
+    echo "⚠️  Main stack not found, using defaults"
     DB_ENDPOINT="localhost"
     DB_SECRET_ARN=""
     DB_CLUSTER_ARN=""
     DB_CLUSTER_ID=""
     DB_PORT="5432"
     ENGINE_VERSION=""
-fi
-
-# Get Cognito outputs
-if [ -n "$COGNITO_STACK" ]; then
-    echo "📊 Extracting Cognito outputs..."
-    COGNITO_USER_POOL_ID=$(get_stack_output "$COGNITO_STACK" "UserPoolId")
-    COGNITO_CLIENT_ID=$(get_stack_output "$COGNITO_STACK" "ClientId")
-    COGNITO_IDENTITY_POOL_ID=$(get_stack_output "$COGNITO_STACK" "IdentityPoolId")
-    ADMIN_USERNAME=$(get_stack_output "$COGNITO_STACK" "AdminUsername")
-    READONLY_USERNAME=$(get_stack_output "$COGNITO_STACK" "ReadonlyUsername")
-    DEFAULT_PASSWORD=$(get_stack_output "$COGNITO_STACK" "DefaultPassword")
-else
-    echo "⚠️  Cognito stack not found"
     COGNITO_USER_POOL_ID=""
     COGNITO_CLIENT_ID=""
     COGNITO_IDENTITY_POOL_ID=""
@@ -75,6 +71,7 @@ else
 fi
 
 echo "✅ Stack outputs discovered:"
+echo "   Main Stack: ${MAIN_STACK_NAME:-'Not found'}"
 echo "   Database Endpoint: ${DB_ENDPOINT:-'Not found'}"
 echo "   Database Secret: ${DB_SECRET_ARN:-'Not found'}"
 echo "   Database Cluster: ${DB_CLUSTER_ID:-'Not found'}"
@@ -83,11 +80,11 @@ echo "   Cognito Client: ${COGNITO_CLIENT_ID:-'Not found'}"
 
 # Create environment configuration
 cat > /workshop/.env << EOF
-# DAT301 Workshop Environment Variables (Auto-discovered from CloudFormation)
+# DAT301 Workshop Environment Variables (From Main Stack: ${MAIN_STACK_NAME})
 AWS_REGION=$AWS_REGION
 AWS_DEFAULT_REGION=$AWS_REGION
 
-# Database Configuration
+# Database Configuration (from main stack outputs)
 DATABASE_ENDPOINT=${DB_ENDPOINT:-localhost}
 DATABASE_PORT=${DB_PORT:-5432}
 DATABASE_NAME=workshop_db
@@ -102,7 +99,7 @@ RDS_SECRET_ARN=${DB_SECRET_ARN:-}
 DATABASE_SECRET_ARN=${DB_SECRET_ARN:-}
 HOST=${DB_ENDPOINT:-localhost}
 
-# Cognito Configuration
+# Cognito Configuration (from main stack outputs)
 COGNITO_USER_POOL_ID=${COGNITO_USER_POOL_ID:-}
 COGNITO_CLIENT_ID=${COGNITO_CLIENT_ID:-}
 COGNITO_IDENTITY_POOL_ID=${COGNITO_IDENTITY_POOL_ID:-}
@@ -111,18 +108,17 @@ READONLY_USERNAME=${READONLY_USERNAME:-readonly}
 DEFAULT_PASSWORD=${DEFAULT_PASSWORD:-TempPass123!}
 
 # Stack Information
-DATABASE_STACK_NAME=${DATABASE_STACK:-}
-COGNITO_STACK_NAME=${COGNITO_STACK:-}
+MAIN_STACK_NAME=${MAIN_STACK_NAME:-}
 EOF
 
 # Set up environment variables for ec2-user
 cat >> /home/ec2-user/.bashrc << EOF
 
-# DAT301 Workshop Environment Variables (Auto-discovered)
+# DAT301 Workshop Environment Variables (From Main Stack: ${MAIN_STACK_NAME})
 export AWS_REGION="$AWS_REGION"
 export AWS_DEFAULT_REGION="$AWS_REGION"
 
-# Database Configuration
+# Database Configuration (from main stack outputs)
 export DATABASE_ENDPOINT="${DB_ENDPOINT:-localhost}"
 export DATABASE_PORT="${DB_PORT:-5432}"
 export DATABASE_NAME=workshop_db
@@ -136,7 +132,7 @@ export RDS_SECRET_ARN="${DB_SECRET_ARN:-}"
 export DATABASE_SECRET_ARN="${DB_SECRET_ARN:-}"
 export HOST="${DB_ENDPOINT:-localhost}"
 
-# Cognito Configuration
+# Cognito Configuration (from main stack outputs)
 export COGNITO_USER_POOL_ID="${COGNITO_USER_POOL_ID:-}"
 export COGNITO_CLIENT_ID="${COGNITO_CLIENT_ID:-}"
 export COGNITO_IDENTITY_POOL_ID="${COGNITO_IDENTITY_POOL_ID:-}"
@@ -160,6 +156,6 @@ EOF
 # Set ownership
 chown ec2-user:ec2-user /workshop/.env
 
-echo "✅ Environment configuration completed with CloudFormation discovery"
+echo "✅ Environment configuration completed from main stack: ${MAIN_STACK_NAME}"
 echo "📁 Environment file created: /workshop/.env"
 echo "🔄 Run 'source ~/.bashrc' or start a new shell to load environment"
