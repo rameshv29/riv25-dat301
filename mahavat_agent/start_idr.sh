@@ -34,7 +34,7 @@ echo "   Database: $IDR_DATABASE_NAME"
 echo "   DynamoDB: $DYNAMODB_TABLE"
 
 # Activate virtual environment
-source venv_swarm/bin/activate
+source /workshop/mahavat_agent/venv/bin/activate
 
 # Start IDR agent
 streamlit run streamlit_idr_ui.py --server.port 8501 --server.address 0.0.0.0
