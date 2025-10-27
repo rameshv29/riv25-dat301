@@ -1,68 +1,51 @@
 #!/bin/bash
 echo "🗄️ DAT301 Workshop - Database Setup Scripts"
 
-# Create database setup script
-cat > /workshop/setup_database.sh << 'EOF'
+# Create database scripts directory
+mkdir -p /workshop/database
+
+# Copy SQL scripts from repo to workshop directory
+echo "📋 Copying database setup scripts..."
+
+# Copy all SQL files from scripts/database/ to /workshop/database/
+if [ -d /workshop/scripts/database ]; then
+    cp /workshop/scripts/database/*.sql /workshop/database/ 2>/dev/null || true
+fi
+
+# Create master setup script
+cat > /workshop/database/setup.sh << 'EOF'
 #!/bin/bash
-echo "Setting up database roles and extensions..."
+set -e
 
-# Get database credentials from Secrets Manager
-DB_SECRET=$(aws secretsmanager get-secret-value --secret-id $DATABASE_SECRET_ARN --region $AWS_DEFAULT_REGION --query SecretString --output text)
-DB_USER=$(echo $DB_SECRET | jq -r .username)
-DB_PASS=$(echo $DB_SECRET | jq -r .password)
+echo "🗄️ Setting up workshop database..."
 
-# Connect to database and set up roles
-PGPASSWORD=$DB_PASS psql -h $DATABASE_ENDPOINT -U $DB_USER -d $DATABASE_NAME << 'EOSQL'
--- Create extensions
-CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
-CREATE EXTENSION IF NOT EXISTS vector;
+# Use PG* environment variables (set by /etc/profile.d/workshop-env.sh)
+# PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD
 
--- Create admin role
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'workshop_admin') THEN
-        CREATE ROLE workshop_admin WITH LOGIN PASSWORD 'AdminPass2025!';
-    END IF;
-END
-$$;
+# Check if variables are set
+if [ -z "$PGHOST" ] || [ -z "$PGDATABASE" ] || [ -z "$PGUSER" ]; then
+    echo "❌ Error: Database environment variables not set"
+    echo "   Run: source /etc/profile.d/workshop-env.sh"
+    exit 1
+fi
 
--- Grant admin privileges
-GRANT ALL PRIVILEGES ON DATABASE workshop_db TO workshop_admin;
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO workshop_admin;
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO workshop_admin;
-GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO workshop_admin;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO workshop_admin;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO workshop_admin;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO workshop_admin;
+echo "📊 Database: $PGDATABASE on $PGHOST"
 
--- Create readonly role
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'workshop_readonly') THEN
-        CREATE ROLE workshop_readonly WITH LOGIN PASSWORD 'ReadonlyPass2025!';
-    END IF;
-END
-$$;
+# Run SQL scripts in order
+for script in /workshop/database/*.sql; do
+    if [ -f "$script" ]; then
+        echo "📝 Executing: $(basename $script)"
+        psql -f "$script" 2>&1 || {
+            echo "⚠️  Warning: $(basename $script) failed or already applied"
+        }
+    fi
+done
 
--- Grant readonly privileges
-GRANT CONNECT ON DATABASE workshop_db TO workshop_readonly;
-GRANT USAGE ON SCHEMA public TO workshop_readonly;
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO workshop_readonly;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO workshop_readonly;
-GRANT SELECT ON information_schema.tables TO workshop_readonly;
-GRANT SELECT ON information_schema.columns TO workshop_readonly;
-GRANT SELECT ON pg_stat_user_tables TO workshop_readonly;
-GRANT SELECT ON pg_stat_user_indexes TO workshop_readonly;
-GRANT SELECT ON pg_stat_activity TO workshop_readonly;
-GRANT SELECT ON pg_stat_database TO workshop_readonly;
-GRANT SELECT ON pg_stat_statements TO workshop_readonly;
-
-EOSQL
-
-echo "Database setup completed!"
+echo "✅ Database setup completed!"
 EOF
 
-chmod +x /workshop/setup_database.sh
-chown ec2-user:ec2-user /workshop/setup_database.sh
+chmod +x /workshop/database/setup.sh
+chown -R ec2-user:ec2-user /workshop/database
 
-echo "✅ Database setup scripts created"
+echo "✅ Database setup scripts created in /workshop/database/"
+echo "   Run: /workshop/database/setup.sh"
