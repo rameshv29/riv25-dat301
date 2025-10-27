@@ -10,11 +10,21 @@ MAIN_STACK_NAME="${WORKSHOP_STACK_NAME:-}"
 
 if [ -z "$MAIN_STACK_NAME" ]; then
     echo "⚠️  WORKSHOP_STACK_NAME not set, trying to discover main stack..."
+    # Get all stacks starting with dat301-reinvent-main, then filter out nested stacks
     MAIN_STACK_NAME=$(aws cloudformation list-stacks \
         --region "$AWS_REGION" \
         --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE \
-        --query "StackSummaries[?contains(StackName, 'dat301-reinvent-main')].StackName" \
-        --output text 2>/dev/null | head -1)
+        --query "StackSummaries[?starts_with(StackName, 'dat301-reinvent-main')].StackName" \
+        --output text 2>/dev/null | tr '\t' '\n' | grep -E '^dat301-reinvent-main$' | head -1)
+    
+    # If exact match not found, try to find the shortest name (likely the root)
+    if [ -z "$MAIN_STACK_NAME" ]; then
+        MAIN_STACK_NAME=$(aws cloudformation list-stacks \
+            --region "$AWS_REGION" \
+            --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE \
+            --query "StackSummaries[?starts_with(StackName, 'dat301-reinvent-main')].StackName" \
+            --output text 2>/dev/null | tr '\t' '\n' | awk '{print length, $0}' | sort -n | head -1 | cut -d' ' -f2-)
+    fi
 fi
 
 echo "🔍 Using main stack: ${MAIN_STACK_NAME:-'Not found'}"
