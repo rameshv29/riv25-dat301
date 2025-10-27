@@ -94,11 +94,11 @@ def lambda_handler(event, context):
         # pgbench -U postgres -i -s 20000 postgres -h rdspg1.cv2iwqsmwf4q.us-west-2.rds.amazonaws.com -U postgres -d postgres -p 5432
         # pgbench -U postgres -c 265 -j 65 -T 6000 -S postgres -p 5436
         os.environ['PGPASSWORD'] = password
-        p = subprocess.Popen("/usr/local/pgsql/bin/pgbench -i -n -s 200 -h {} -U postgres -d postgres -p 5432".format(host), shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        p = subprocess.Popen("/usr/bin/pgbench -i -n -s 200 -h {} -U postgres -d postgres -p 5432".format(host), shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         for line in p.stdout.readlines():
             continue
         retval = p.wait()
-        p = subprocess.Popen("/usr/local/pgsql/bin/pgbench -S -c 15 -j 5 -T {} -h {} -U postgres -d postgres -p 5432".format(duration_seconds, host), shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        p = subprocess.Popen("/usr/bin/pgbench -S -c 15 -j 5 -T {} -h {} -U postgres -d postgres -p 5432".format(duration_seconds, host), shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         for line in p.stdout.readlines():
             continue
         retval = p.wait()        
