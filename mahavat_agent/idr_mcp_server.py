@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 IDR MCP Server
-Provides incident management and knowledge base retrieval tools via MCP protocol
+Provides incident management tools via MCP protocol
+Knowledge base retrieval is handled by Bedrock KB Retrieval MCP Server
 """
 
 import os
@@ -18,14 +19,9 @@ logger = logging.getLogger(__name__)
 # Configuration
 AWS_REGION = os.environ.get('AWS_REGION', 'us-west-2')
 DYNAMODB_TABLE = os.environ.get('DYNAMODB_TABLE', 'dat301-ws-incidents')
-IDR_CLUSTER_ARN = os.environ.get('IDR_CLUSTER_ARN', '')
-IDR_SECRET_ARN = os.environ.get('IDR_SECRET_ARN', '')
-IDR_DATABASE_NAME = os.environ.get('IDR_DATABASE_NAME', 'idr_db')
 
 # AWS clients
 dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
-rds_data = boto3.client('rds-data', region_name=AWS_REGION)
-bedrock_runtime = boto3.client('bedrock-runtime', region_name=AWS_REGION)
 
 # Create MCP server
 app = Server("idr-mcp-server")
@@ -36,14 +32,14 @@ async def list_tools() -> list[Tool]:
     return [
         Tool(
             name="list_incidents",
-            description="List all incidents from DynamoDB. Optionally filter by status (OPEN, IN_PROGRESS, RESOLVED, CLOSED).",
+            description="List all incidents from DynamoDB. Optionally filter by status (PENDING, RESOLVED).",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "status": {
                         "type": "string",
-                        "description": "Filter by status: OPEN, IN_PROGRESS, RESOLVED, or CLOSED",
-                        "enum": ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"]
+                        "description": "Filter by status: PENDING or RESOLVED",
+                        "enum": ["PENDING", "RESOLVED"]
                     }
                 }
             }
@@ -56,7 +52,7 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "incident_id": {
                         "type": "string",
-                        "description": "The incident ID (e.g., INC-12345678)"
+                        "description": "The incident ID"
                     }
                 },
                 "required": ["incident_id"]
@@ -64,7 +60,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="update_incident_status",
-            description="Update the status of an incident. Use this after remediating an incident.",
+            description="Update the status of an incident to RESOLVED. ONLY use this AFTER verifying the remediation was successful.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -72,36 +68,12 @@ async def list_tools() -> list[Tool]:
                         "type": "string",
                         "description": "The incident ID to update"
                     },
-                    "status": {
-                        "type": "string",
-                        "description": "New status",
-                        "enum": ["OPEN", "IN_PROGRESS", "RESOLVED", "CLOSED"]
-                    },
                     "resolution": {
                         "type": "string",
-                        "description": "Resolution notes (optional)"
+                        "description": "Resolution notes describing what was changed"
                     }
                 },
-                "required": ["incident_id", "status"]
-            }
-        ),
-        Tool(
-            name="search_kb_runbooks",
-            description="Search the knowledge base for remediation runbooks using vector similarity. Returns relevant runbooks for the given query.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "Search query (e.g., 'high CPU remediation', 'IOPS troubleshooting')"
-                    },
-                    "limit": {
-                        "type": "integer",
-                        "description": "Maximum number of results to return (default: 3)",
-                        "default": 3
-                    }
-                },
-                "required": ["query"]
+                "required": ["incident_id", "resolution"]
             }
         )
     ]
@@ -120,14 +92,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         elif name == "update_incident_status":
             return await update_incident_status(
                 arguments["incident_id"],
-                arguments["status"],
-                arguments.get("resolution")
-            )
-        
-        elif name == "search_kb_runbooks":
-            return await search_kb_runbooks(
-                arguments["query"],
-                arguments.get("limit", 3)
+                arguments["resolution"]
             )
         
         else:
@@ -159,6 +124,7 @@ async def list_incidents(status: Optional[str] = None) -> list[TextContent]:
         for inc in incidents:
             result += f"**{inc.get('incident_id', 'N/A')}**\n"
             result += f"- Type: {inc.get('incident_type', 'Unknown')}\n"
+            result += f"- Identifier: {inc.get('incident_identifier', 'Unknown')}\n"
             result += f"- Status: {inc.get('incident_status', 'Unknown')}\n"
             result += f"- Alarm: {inc.get('alarm_name', 'N/A')}\n"
             result += f"- Reason: {inc.get('alarm_reason', 'N/A')}\n"
@@ -191,8 +157,8 @@ async def get_incident_details(incident_id: str) -> list[TextContent]:
     except Exception as e:
         return [TextContent(type="text", text=f"Error getting incident: {str(e)}")]
 
-async def update_incident_status(incident_id: str, status: str, resolution: Optional[str] = None) -> list[TextContent]:
-    """Update incident status"""
+async def update_incident_status(incident_id: str, resolution: str) -> list[TextContent]:
+    """Update incident status to RESOLVED"""
     try:
         table = dynamodb.Table(DYNAMODB_TABLE)
         
@@ -209,73 +175,20 @@ async def update_incident_status(incident_id: str, status: str, resolution: Opti
         sk = items[0]['sk']
         
         from datetime import datetime
-        update_expr = 'SET incident_status = :status, updated_at = :updated_at'
-        expr_values = {
-            ':status': status,
-            ':updated_at': datetime.utcnow().isoformat()
-        }
-        
-        if resolution:
-            update_expr += ', resolution = :resolution'
-            expr_values[':resolution'] = resolution
-        
         table.update_item(
             Key={'pk': f'INCIDENT#{incident_id}', 'sk': sk},
-            UpdateExpression=update_expr,
-            ExpressionAttributeValues=expr_values
+            UpdateExpression='SET incident_status = :status, updated_at = :updated_at, resolution = :resolution',
+            ExpressionAttributeValues={
+                ':status': 'RESOLVED',
+                ':updated_at': datetime.utcnow().isoformat(),
+                ':resolution': resolution
+            }
         )
         
-        return [TextContent(type="text", text=f"Successfully updated incident {incident_id} to status {status}")]
+        return [TextContent(type="text", text=f"Successfully updated incident {incident_id} to RESOLVED")]
     
     except Exception as e:
         return [TextContent(type="text", text=f"Error updating incident: {str(e)}")]
-
-async def search_kb_runbooks(query: str, limit: int = 3) -> list[TextContent]:
-    """Search knowledge base using pgvector"""
-    try:
-        # Get embedding
-        response = bedrock_runtime.invoke_model(
-            modelId='amazon.titan-embed-text-v2:0',
-            body=json.dumps({"inputText": query})
-        )
-        result = json.loads(response['body'].read())
-        embedding = result['embedding']
-        
-        # Search pgvector
-        embedding_str = '[' + ','.join(map(str, embedding)) + ']'
-        
-        sql = f"""
-        SELECT text, metadata, 
-               embedding <=> '{embedding_str}'::vector AS distance
-        FROM idr_knowledge
-        ORDER BY distance
-        LIMIT {limit}
-        """
-        
-        response = rds_data.execute_statement(
-            resourceArn=IDR_CLUSTER_ARN,
-            secretArn=IDR_SECRET_ARN,
-            database=IDR_DATABASE_NAME,
-            sql=sql
-        )
-        
-        if not response.get('records'):
-            return [TextContent(type="text", text="No runbooks found in knowledge base.")]
-        
-        result_text = f"Found {len(response['records'])} relevant runbooks:\n\n"
-        for i, record in enumerate(response['records'], 1):
-            text = record[0]['stringValue']
-            distance = float(record[2]['doubleValue'])
-            similarity = 1 - distance
-            
-            result_text += f"**Runbook {i}** (Similarity: {similarity:.2%})\n"
-            result_text += f"{text}\n\n"
-            result_text += "---\n\n"
-        
-        return [TextContent(type="text", text=result_text)]
-    
-    except Exception as e:
-        return [TextContent(type="text", text=f"Error searching knowledge base: {str(e)}")]
 
 async def main():
     """Run the MCP server"""
