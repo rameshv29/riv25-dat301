@@ -25,6 +25,32 @@ disable-workspace-trust: true
 disable-file-downloads: false
 EOF
 
+# Create VS Code user settings
+mkdir -p /home/ec2-user/.local/share/code-server/User
+cat > /home/ec2-user/.local/share/code-server/User/settings.json << 'EOF'
+{
+  "workbench.startupEditor": "none",
+  "terminal.integrated.enablePersistentSessions": false,
+  "terminal.integrated.confirmOnExit": "never",
+  "terminal.integrated.copyOnSelection": true,
+  "terminal.integrated.rightClickBehavior": "paste",
+  "security.workspace.trust.enabled": false,
+  "files.autoSave": "afterDelay"
+}
+EOF
+
+# Create workspace file to open /workshop folder by default
+cat > /home/ec2-user/workshop.code-workspace << 'EOF'
+{
+  "folders": [
+    {
+      "path": "/workshop"
+    }
+  ],
+  "settings": {}
+}
+EOF
+
 # Create systemd service for code-server
 cat > /etc/systemd/system/code-server.service << 'EOF'
 [Unit]
@@ -36,7 +62,7 @@ Type=simple
 User=ec2-user
 WorkingDirectory=/workshop
 Environment="HOME=/home/ec2-user"
-ExecStart=/bin/bash -c 'export PYENV_ROOT="$HOME/.pyenv" && export PATH="$PYENV_ROOT/bin:$HOME/.local/bin:$PATH" && eval "$(pyenv init -)" && /usr/bin/code-server --bind-addr 0.0.0.0:8080 --auth password'
+ExecStart=/bin/bash -c 'export PYENV_ROOT="$HOME/.pyenv" && export PATH="$PYENV_ROOT/bin:$HOME/.local/bin:$PATH" && eval "$(pyenv init -)" && /usr/bin/code-server --bind-addr 0.0.0.0:8080 --auth password /workshop'
 Restart=always
 RestartSec=10
 
