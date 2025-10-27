@@ -9,6 +9,12 @@ if [ ! -f "$HOME/.local/bin/uv" ]; then
 else
     echo "UV already installed"
 fi
+
+# Add UV to PATH if not already there
+if ! grep -q ".local/bin" ~/.bashrc; then
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+    echo "✅ Added UV to PATH in .bashrc"
+fi
 EOF
 
 # Set up Python environment as ec2-user

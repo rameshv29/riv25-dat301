@@ -26,7 +26,7 @@ disable-file-downloads: false
 EOF
 
 # Create systemd service for code-server
-cat > /etc/systemd/system/code-server.service << EOF
+cat > /etc/systemd/system/code-server.service << 'EOF'
 [Unit]
 Description=code-server
 After=network.target
@@ -35,10 +35,8 @@ After=network.target
 Type=simple
 User=ec2-user
 WorkingDirectory=/workshop
-Environment=PYENV_ROOT=/home/ec2-user/.pyenv
-Environment=PATH=/home/ec2-user/.pyenv/bin:/home/ec2-user/.local/bin:/usr/local/bin:/usr/bin:/bin
-ExecStartPre=/bin/bash -c 'eval "$(pyenv init -)"'
-ExecStart=/usr/bin/code-server --bind-addr 0.0.0.0:8080 --auth password
+Environment="HOME=/home/ec2-user"
+ExecStart=/bin/bash -c 'export PYENV_ROOT="$HOME/.pyenv" && export PATH="$PYENV_ROOT/bin:$HOME/.local/bin:$PATH" && eval "$(pyenv init -)" && /usr/bin/code-server --bind-addr 0.0.0.0:8080 --auth password'
 Restart=always
 RestartSec=10
 
