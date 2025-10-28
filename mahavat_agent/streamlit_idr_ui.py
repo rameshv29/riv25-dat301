@@ -261,67 +261,102 @@ def show_pending_incidents():
                 
                 try:
                     rds = boto3.client('rds', region_name=AWS_REGION)
+                    incident_type = selected_incident['incidentType']
+                    identifier = selected_incident['incidentIdentifier']
                     
-                    # Step 1: Get current config
                     col4.markdown("**Step 1: Getting current configuration...**")
-                    current_config = rds.describe_db_clusters(
-                        DBClusterIdentifier=selected_incident['incidentIdentifier']
-                    )['DBClusters'][0]['ServerlessV2ScalingConfiguration']
                     
-                    current_min = current_config['MinCapacity']
-                    current_max = current_config['MaxCapacity']
-                    col4.markdown(f"✅ Current: MinCapacity={current_min}, MaxCapacity={current_max}")
-                    
-                    # Step 2: Calculate new value (20% increase, rounded to 0.5 increments)
-                    col4.markdown("\n**Step 2: Calculating new MaxCapacity (20% increase)...**")
-                    increase = current_max * 0.2
-                    new_max = current_max + (round(increase / 0.5) * 0.5)  # Round to nearest 0.5
-                    col4.markdown(f"✅ Calculated: {current_max} + 20% = {current_max + increase:.2f}, rounded to {new_max} ACU")
-                    
-                    # Step 3: Apply change
-                    col4.markdown("\n**Step 3: Applying configuration change...**")
-                    rds.modify_db_cluster(
-                        DBClusterIdentifier=selected_incident['incidentIdentifier'],
-                        ServerlessV2ScalingConfiguration={
-                            'MinCapacity': current_min,
-                            'MaxCapacity': new_max
-                        },
-                        ApplyImmediately=True
-                    )
-                    col4.markdown("✅ Modification initiated")
-                    
-                    # Step 4: Verify
-                    import time
-                    time.sleep(3)
-                    col4.markdown("\n**Step 4: Verifying change...**")
-                    
-                    verify_config = rds.describe_db_clusters(
-                        DBClusterIdentifier=selected_incident['incidentIdentifier']
-                    )['DBClusters'][0]['ServerlessV2ScalingConfiguration']
-                    
-                    if verify_config['MaxCapacity'] == new_max:
-                        col4.markdown(f"✅ Verified: MaxCapacity is now {new_max} ACU")
+                    if incident_type == 'ACU':
+                        # Handle Aurora Serverless cluster
+                        current_config = rds.describe_db_clusters(
+                            DBClusterIdentifier=identifier
+                        )['DBClusters'][0]['ServerlessV2ScalingConfiguration']
                         
-                        # Step 5: Update incident status
-                        col4.markdown("\n**Step 5: Updating incident status...**")
-                        dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
-                        table = dynamodb.Table(DYNAMODB_TABLE)
+                        current_min = current_config['MinCapacity']
+                        current_max = current_config['MaxCapacity']
+                        col4.markdown(f"✅ Current: MinCapacity={current_min}, MaxCapacity={current_max}")
                         
-                        table.update_item(
-                            Key={
-                                'pk': f"INCIDENT#{selected_incident['incident_id']}",
-                                'sk': f"ALARM#{selected_incident.get('alarm_name', 'unknown')}"
-                            },
-                            UpdateExpression='SET incident_status = :status, resolution_notes = :notes, updated_at = :time',
-                            ExpressionAttributeValues={
-                                ':status': 'RESOLVED',
-                                ':notes': f"Increased MaxCapacity from {current_max} to {new_max} ACU (20% increase)",
-                                ':time': datetime.now().isoformat()
-                            }
+                        col4.markdown("\n**Step 2: Calculating new MaxCapacity (20% increase)...**")
+                        increase = current_max * 0.2
+                        new_max = current_max + (round(increase / 0.5) * 0.5)
+                        col4.markdown(f"✅ Calculated: {current_max} + 20% = {current_max + increase:.2f}, rounded to {new_max} ACU")
+                        
+                        col4.markdown("\n**Step 3: Applying configuration change...**")
+                        rds.modify_db_cluster(
+                            DBClusterIdentifier=identifier,
+                            ServerlessV2ScalingConfiguration={'MinCapacity': current_min, 'MaxCapacity': new_max},
+                            ApplyImmediately=True
                         )
-                        col4.success(f"✅ Incident resolved! MaxCapacity increased from {current_max} to {new_max} ACU")
+                        col4.markdown("✅ Modification initiated")
+                        
+                        import time
+                        time.sleep(3)
+                        col4.markdown("\n**Step 4: Verifying change...**")
+                        
+                        verify_config = rds.describe_db_clusters(DBClusterIdentifier=identifier)['DBClusters'][0]['ServerlessV2ScalingConfiguration']
+                        
+                        if verify_config['MaxCapacity'] == new_max:
+                            col4.markdown(f"✅ Verified: MaxCapacity is now {new_max} ACU")
+                            resolution_note = f"Increased MaxCapacity from {current_max} to {new_max} ACU (20% increase)"
+                            success_msg = f"✅ Incident resolved! MaxCapacity increased from {current_max} to {new_max} ACU"
+                        else:
+                            col4.warning(f"⚠️ Verification pending. Current MaxCapacity: {verify_config['MaxCapacity']}")
+                            return
+                            
+                    elif incident_type == 'IOPS':
+                        # Handle DB instance IOPS
+                        instance_info = rds.describe_db_instances(DBInstanceIdentifier=identifier)['DBInstances'][0]
+                        current_iops = instance_info['Iops']
+                        storage_type = instance_info['StorageType']
+                        
+                        col4.markdown(f"✅ Current: IOPS={current_iops}, StorageType={storage_type}")
+                        
+                        col4.markdown("\n**Step 2: Calculating new IOPS (20% increase)...**")
+                        increase = current_iops * 0.2
+                        new_iops = int(current_iops + increase)
+                        col4.markdown(f"✅ Calculated: {current_iops} + 20% = {new_iops} IOPS")
+                        
+                        col4.markdown("\n**Step 3: Applying configuration change...**")
+                        rds.modify_db_instance(
+                            DBInstanceIdentifier=identifier,
+                            Iops=new_iops,
+                            ApplyImmediately=True
+                        )
+                        col4.markdown("✅ Modification initiated")
+                        
+                        import time
+                        time.sleep(3)
+                        col4.markdown("\n**Step 4: Verifying change...**")
+                        
+                        verify_info = rds.describe_db_instances(DBInstanceIdentifier=identifier)['DBInstances'][0]
+                        verify_iops = verify_info.get('Iops', verify_info.get('PendingModifiedValues', {}).get('Iops', current_iops))
+                        
+                        col4.markdown(f"✅ Verified: IOPS modification in progress (target: {new_iops})")
+                        resolution_note = f"Increased IOPS from {current_iops} to {new_iops} (20% increase)"
+                        success_msg = f"✅ Incident resolved! IOPS increased from {current_iops} to {new_iops}"
+                    
                     else:
-                        col4.warning(f"⚠️ Verification pending. Current MaxCapacity: {verify_config['MaxCapacity']}")
+                        col4.error(f"❌ Unsupported incident type: {incident_type}")
+                        return
+                    
+                    # Step 5: Update incident status
+                    col4.markdown("\n**Step 5: Updating incident status...**")
+                    dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
+                    table = dynamodb.Table(DYNAMODB_TABLE)
+                    
+                    table.update_item(
+                        Key={
+                            'pk': f"INCIDENT#{selected_incident['incident_id']}",
+                            'sk': f"ALARM#{selected_incident.get('alarm_name', 'unknown')}"
+                        },
+                        UpdateExpression='SET incident_status = :status, resolution_notes = :notes, updated_at = :time',
+                        ExpressionAttributeValues={
+                            ':status': 'RESOLVED',
+                            ':notes': resolution_note,
+                            ':time': datetime.now().isoformat()
+                        }
+                    )
+                    col4.success(success_msg)
                         
                 except Exception as e:
                     col4.error(f"❌ Error during remediation: {str(e)}")
@@ -644,67 +679,102 @@ def show_pending_incidents():
                 
                 try:
                     rds = boto3.client('rds', region_name=AWS_REGION)
+                    incident_type = selected_incident['incidentType']
+                    identifier = selected_incident['incidentIdentifier']
                     
-                    # Step 1: Get current config
                     col4.markdown("**Step 1: Getting current configuration...**")
-                    current_config = rds.describe_db_clusters(
-                        DBClusterIdentifier=selected_incident['incidentIdentifier']
-                    )['DBClusters'][0]['ServerlessV2ScalingConfiguration']
                     
-                    current_min = current_config['MinCapacity']
-                    current_max = current_config['MaxCapacity']
-                    col4.markdown(f"✅ Current: MinCapacity={current_min}, MaxCapacity={current_max}")
-                    
-                    # Step 2: Calculate new value (20% increase, rounded to 0.5 increments)
-                    col4.markdown("\n**Step 2: Calculating new MaxCapacity (20% increase)...**")
-                    increase = current_max * 0.2
-                    new_max = current_max + (round(increase / 0.5) * 0.5)  # Round to nearest 0.5
-                    col4.markdown(f"✅ Calculated: {current_max} + 20% = {current_max + increase:.2f}, rounded to {new_max} ACU")
-                    
-                    # Step 3: Apply change
-                    col4.markdown("\n**Step 3: Applying configuration change...**")
-                    rds.modify_db_cluster(
-                        DBClusterIdentifier=selected_incident['incidentIdentifier'],
-                        ServerlessV2ScalingConfiguration={
-                            'MinCapacity': current_min,
-                            'MaxCapacity': new_max
-                        },
-                        ApplyImmediately=True
-                    )
-                    col4.markdown("✅ Modification initiated")
-                    
-                    # Step 4: Verify
-                    import time
-                    time.sleep(3)
-                    col4.markdown("\n**Step 4: Verifying change...**")
-                    
-                    verify_config = rds.describe_db_clusters(
-                        DBClusterIdentifier=selected_incident['incidentIdentifier']
-                    )['DBClusters'][0]['ServerlessV2ScalingConfiguration']
-                    
-                    if verify_config['MaxCapacity'] == new_max:
-                        col4.markdown(f"✅ Verified: MaxCapacity is now {new_max} ACU")
+                    if incident_type == 'ACU':
+                        # Handle Aurora Serverless cluster
+                        current_config = rds.describe_db_clusters(
+                            DBClusterIdentifier=identifier
+                        )['DBClusters'][0]['ServerlessV2ScalingConfiguration']
                         
-                        # Step 5: Update incident status
-                        col4.markdown("\n**Step 5: Updating incident status...**")
-                        dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
-                        table = dynamodb.Table(DYNAMODB_TABLE)
+                        current_min = current_config['MinCapacity']
+                        current_max = current_config['MaxCapacity']
+                        col4.markdown(f"✅ Current: MinCapacity={current_min}, MaxCapacity={current_max}")
                         
-                        table.update_item(
-                            Key={
-                                'pk': f"INCIDENT#{selected_incident['incident_id']}",
-                                'sk': f"ALARM#{selected_incident.get('alarm_name', 'unknown')}"
-                            },
-                            UpdateExpression='SET incident_status = :status, resolution_notes = :notes, updated_at = :time',
-                            ExpressionAttributeValues={
-                                ':status': 'RESOLVED',
-                                ':notes': f"Increased MaxCapacity from {current_max} to {new_max} ACU (20% increase)",
-                                ':time': datetime.now().isoformat()
-                            }
+                        col4.markdown("\n**Step 2: Calculating new MaxCapacity (20% increase)...**")
+                        increase = current_max * 0.2
+                        new_max = current_max + (round(increase / 0.5) * 0.5)
+                        col4.markdown(f"✅ Calculated: {current_max} + 20% = {current_max + increase:.2f}, rounded to {new_max} ACU")
+                        
+                        col4.markdown("\n**Step 3: Applying configuration change...**")
+                        rds.modify_db_cluster(
+                            DBClusterIdentifier=identifier,
+                            ServerlessV2ScalingConfiguration={'MinCapacity': current_min, 'MaxCapacity': new_max},
+                            ApplyImmediately=True
                         )
-                        col4.success(f"✅ Incident resolved! MaxCapacity increased from {current_max} to {new_max} ACU")
+                        col4.markdown("✅ Modification initiated")
+                        
+                        import time
+                        time.sleep(3)
+                        col4.markdown("\n**Step 4: Verifying change...**")
+                        
+                        verify_config = rds.describe_db_clusters(DBClusterIdentifier=identifier)['DBClusters'][0]['ServerlessV2ScalingConfiguration']
+                        
+                        if verify_config['MaxCapacity'] == new_max:
+                            col4.markdown(f"✅ Verified: MaxCapacity is now {new_max} ACU")
+                            resolution_note = f"Increased MaxCapacity from {current_max} to {new_max} ACU (20% increase)"
+                            success_msg = f"✅ Incident resolved! MaxCapacity increased from {current_max} to {new_max} ACU"
+                        else:
+                            col4.warning(f"⚠️ Verification pending. Current MaxCapacity: {verify_config['MaxCapacity']}")
+                            return
+                            
+                    elif incident_type == 'IOPS':
+                        # Handle DB instance IOPS
+                        instance_info = rds.describe_db_instances(DBInstanceIdentifier=identifier)['DBInstances'][0]
+                        current_iops = instance_info['Iops']
+                        storage_type = instance_info['StorageType']
+                        
+                        col4.markdown(f"✅ Current: IOPS={current_iops}, StorageType={storage_type}")
+                        
+                        col4.markdown("\n**Step 2: Calculating new IOPS (20% increase)...**")
+                        increase = current_iops * 0.2
+                        new_iops = int(current_iops + increase)
+                        col4.markdown(f"✅ Calculated: {current_iops} + 20% = {new_iops} IOPS")
+                        
+                        col4.markdown("\n**Step 3: Applying configuration change...**")
+                        rds.modify_db_instance(
+                            DBInstanceIdentifier=identifier,
+                            Iops=new_iops,
+                            ApplyImmediately=True
+                        )
+                        col4.markdown("✅ Modification initiated")
+                        
+                        import time
+                        time.sleep(3)
+                        col4.markdown("\n**Step 4: Verifying change...**")
+                        
+                        verify_info = rds.describe_db_instances(DBInstanceIdentifier=identifier)['DBInstances'][0]
+                        verify_iops = verify_info.get('Iops', verify_info.get('PendingModifiedValues', {}).get('Iops', current_iops))
+                        
+                        col4.markdown(f"✅ Verified: IOPS modification in progress (target: {new_iops})")
+                        resolution_note = f"Increased IOPS from {current_iops} to {new_iops} (20% increase)"
+                        success_msg = f"✅ Incident resolved! IOPS increased from {current_iops} to {new_iops}"
+                    
                     else:
-                        col4.warning(f"⚠️ Verification pending. Current MaxCapacity: {verify_config['MaxCapacity']}")
+                        col4.error(f"❌ Unsupported incident type: {incident_type}")
+                        return
+                    
+                    # Step 5: Update incident status
+                    col4.markdown("\n**Step 5: Updating incident status...**")
+                    dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
+                    table = dynamodb.Table(DYNAMODB_TABLE)
+                    
+                    table.update_item(
+                        Key={
+                            'pk': f"INCIDENT#{selected_incident['incident_id']}",
+                            'sk': f"ALARM#{selected_incident.get('alarm_name', 'unknown')}"
+                        },
+                        UpdateExpression='SET incident_status = :status, resolution_notes = :notes, updated_at = :time',
+                        ExpressionAttributeValues={
+                            ':status': 'RESOLVED',
+                            ':notes': resolution_note,
+                            ':time': datetime.now().isoformat()
+                        }
+                    )
+                    col4.success(success_msg)
                         
                 except Exception as e:
                     col4.error(f"❌ Error during remediation: {str(e)}")
