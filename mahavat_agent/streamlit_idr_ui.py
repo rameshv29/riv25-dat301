@@ -227,11 +227,19 @@ def show_pending_incidents():
         else:
             with col4.status("Retrieving incident runbook..."):
                 runbook_response = agent(
-                    f"""Use the retrieve tool from Bedrock KB Retrieval MCP Server to search knowledge base {IDR_KB_ID} for runbook about {selected_incident['incidentType']} incident.
+                    f"""TASK: Retrieve the EXACT runbook text for {selected_incident['incidentType']} incident.
 
-Search query: "{selected_incident['incidentType']} remediation runbook"
+STEPS:
+1. Call the 'retrieve' tool with:
+   - knowledge_base_id: {IDR_KB_ID}
+   - query: "{selected_incident['incidentType']} remediation runbook"
+   - max_results: 1
 
-Return ONLY the runbook text content from the retrieve results. Do not summarize or modify the text."""
+2. Extract the 'text' field from the first result
+
+3. Return ONLY that text content - NO summary, NO explanation, NO modifications
+
+CRITICAL: Your response must be ONLY the raw runbook markdown text from the retrieve tool result."""
                 )
                 
                 col4.markdown(f"***Runbook Instructions for {selected_incident['incident_id']}***")
@@ -575,9 +583,19 @@ def show_pending_incidents():
         else:
             with col4.status("Retrieving incident runbook..."):
                 runbook_response = agent(
-                    f"Search knowledge base for runbook about {selected_incident['incidentType']} incident. "
-                    f"Incident details: {selected_incident['alarm_reason']}. "
-                    f"Return ONLY the runbook content, no tool invocations."
+                    f"""TASK: Retrieve the EXACT runbook text for {selected_incident['incidentType']} incident.
+
+STEPS:
+1. Call the 'retrieve' tool with:
+   - knowledge_base_id: {IDR_KB_ID}
+   - query: "{selected_incident['incidentType']} remediation runbook"
+   - max_results: 1
+
+2. Extract the 'text' field from the first result
+
+3. Return ONLY that text content - NO summary, NO explanation, NO modifications
+
+CRITICAL: Your response must be ONLY the raw runbook markdown text from the retrieve tool result."""
                 )
                 
                 # Extract only text content, skip tool invocations
