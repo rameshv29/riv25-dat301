@@ -91,14 +91,36 @@ def lambda_handler(event, context):
                 future.result()  # Wait for all threads to complete
     elif workload_type == 'IO':
         print(f"Running IO workload simulation for {host} with time interval of {duration_seconds} seconds")
-        # pgbench -U postgres -i -s 20000 postgres -h rdspg1.cv2iwqsmwf4q.us-west-2.rds.amazonaws.com -U postgres -d postgres -p 5432
-        # pgbench -U postgres -c 265 -j 65 -T 6000 -S postgres -p 5436
+        
+        # Check if pgbench tables exist
+        with psycopg2.connect(host=host, user=username, password=password, dbname=dbname) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.tables 
+                        WHERE table_name = 'pgbench_accounts'
+                    )
+                """)
+                tables_exist = cursor.fetchone()[0]
+        
+        # Initialize pgbench only if tables don't exist
+        if not tables_exist:
+            print("pgbench tables not found, initializing...")
+            os.environ['PGPASSWORD'] = password
+            p = subprocess.Popen("/usr/bin/pgbench -i -n -s 200 -h {} -U postgres -d postgres -p 5432".format(host), 
+                                shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            for line in p.stdout.readlines():
+                print(line.decode().strip())
+            retval = p.wait()
+            if retval != 0:
+                print(f"Warning: pgbench initialization returned code {retval}")
+        else:
+            print("pgbench tables already exist, skipping initialization")
+        
+        # Run pgbench workload
         os.environ['PGPASSWORD'] = password
-        p = subprocess.Popen("/usr/bin/pgbench -i -n -s 200 -h {} -U postgres -d postgres -p 5432".format(host), shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        for line in p.stdout.readlines():
-            continue
-        retval = p.wait()
-        p = subprocess.Popen("/usr/bin/pgbench -S -c 15 -j 5 -T {} -h {} -U postgres -d postgres -p 5432".format(duration_seconds, host), shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        p = subprocess.Popen("/usr/bin/pgbench -S -c 15 -j 5 -T {} -h {} -U postgres -d postgres -p 5432".format(duration_seconds, host), 
+                            shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         for line in p.stdout.readlines():
             continue
         retval = p.wait()        
