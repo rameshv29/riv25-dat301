@@ -348,9 +348,6 @@ def show_all_incidents():
     else:
         st.info("No incidents found")
 
-if __name__ == "__main__":
-    main()
-
 def get_kpi(iconname, metricname, metricvalue):
     """Create KPI card"""
     wch_colour_box = (0,204,102)
