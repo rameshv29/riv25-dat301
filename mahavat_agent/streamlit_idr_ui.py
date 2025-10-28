@@ -135,43 +135,6 @@ def create_idr_agent():
     
     return agent, mcp_clients
 
-def main():
-    st.set_page_config(page_title="IDR: Incident Detection & Remediation", layout="wide")
-    
-    st.markdown("""
-        <style>
-               .block-container {
-                    padding-top: 1rem;
-                    padding-bottom: 0rem;
-                    padding-left: 5rem;
-                    padding-right: 5rem;
-                }
-        </style>
-        """, unsafe_allow_html=True)
-    
-    # Sidebar
-    with st.sidebar:
-        st.image("https://d1.awsstatic.com/logos/aws-logo-lockups/poweredbyaws/PB_AWS_logo_RGB_stacked_REV_SQ.91cd4af40773cbfbd15577a3c2b8a346fe3e8fa2.png", width=120)
-        st.subheader("IDR: Incident Detection & Remediation")
-        st.caption("Powered by Amazon Aurora & Bedrock")
-        st.divider()
-        
-        page = st.radio("Navigation", ["Pending Incidents", "All Incidents"], key="page_nav")
-        
-        st.divider()
-        st.caption("Built with Strands Agent Framework")
-    
-    # Initialize agent
-    if 'idr_agent' not in st.session_state:
-        with st.spinner("🔧 Initializing IDR Agent..."):
-            agent, mcp_clients = create_idr_agent()
-    
-    # Main content
-    if page == "Pending Incidents":
-        show_pending_incidents()
-    else:
-        show_all_incidents()
-
 def show_pending_incidents():
     """Show pending incidents page"""
     st.title(":orange[Pending Incidents]")
