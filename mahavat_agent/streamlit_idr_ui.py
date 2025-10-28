@@ -9,11 +9,11 @@ import pandas as pd
 import json
 import os
 import sys
-from datetime import datetime
 from strands import Agent
 from strands.models import BedrockModel
 from strands.tools.mcp import MCPClient
 from mcp import StdioServerParameters, stdio_client
+from datetime import datetime
 
 # Configuration
 AWS_REGION = os.environ.get('AWS_REGION', 'us-west-2')
@@ -254,53 +254,77 @@ def show_pending_incidents():
             col4.error("Please select an incident to auto-remediate")
         else:
             with col4.status("Remediating incident..."):
-                remediation_response = agent(
-                    f"""Remediate {selected_incident['incidentType']} incident for {selected_incident['incidentIdentifier']}.
-
-**Incident Details:**
-- ID: {selected_incident['incident_id']}
-- Type: {selected_incident['incidentType']}
-- Identifier: {selected_incident['incidentIdentifier']}
-- Reason: {selected_incident['alarm_reason']}
-
-**Remediation Process:**
-
-1. **Get the runbook**: Use retrieve tool to search knowledge base {IDR_KB_ID} for "{selected_incident['incidentType']} remediation runbook"
-
-2. **Follow the runbook steps EXACTLY**: 
-   - The runbook contains specific conditions (e.g., "IF usage > 80% THEN increase by 20%")
-   - Execute each step using call_aws commands
-   - Follow the runbook's calculation logic precisely
-
-3. **Verify the change**: Query the configuration again to confirm it was applied
-
-4. **Update incident status**: ONLY if verification succeeds, call update_incident_status with detailed resolution notes including what changed and the values
-
-Provide clear summary showing:
-- What the runbook instructed
-- What was the current state
-- What changes were made
-- Verification results"""
-                )
-                
-                col4.markdown(f"***Status of auto remediation for {selected_incident['incident_id']}***")
-                col4.markdown(remediation_response)
-                
-                # Check if incident was actually resolved
+                # Direct AWS remediation
                 import boto3
-                dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
-                table = dynamodb.Table(DYNAMODB_TABLE)
-                query_response = table.query(
-                    KeyConditionExpression='pk = :pk',
-                    ExpressionAttributeValues={':pk': f'INCIDENT#{selected_incident["incident_id"]}'}
-                )
                 
-                if query_response['Items']:
-                    status = query_response['Items'][0].get('incident_status', 'PENDING')
-                    if status == 'RESOLVED':
-                        col4.success("✅ Remediation completed and verified!")
+                col4.markdown(f"***Auto-remediation for {selected_incident['incident_id']}***")
+                
+                try:
+                    rds = boto3.client('rds', region_name=AWS_REGION)
+                    
+                    # Step 1: Get current config
+                    col4.markdown("**Step 1: Getting current configuration...**")
+                    current_config = rds.describe_db_clusters(
+                        DBClusterIdentifier=selected_incident['incidentIdentifier']
+                    )['DBClusters'][0]['ServerlessV2ScalingConfiguration']
+                    
+                    current_min = current_config['MinCapacity']
+                    current_max = current_config['MaxCapacity']
+                    col4.markdown(f"✅ Current: MinCapacity={current_min}, MaxCapacity={current_max}")
+                    
+                    # Step 2: Calculate new value (20% increase, rounded to 0.5 increments)
+                    col4.markdown("\n**Step 2: Calculating new MaxCapacity (20% increase)...**")
+                    increase = current_max * 0.2
+                    new_max = current_max + (round(increase / 0.5) * 0.5)  # Round to nearest 0.5
+                    col4.markdown(f"✅ Calculated: {current_max} + 20% = {current_max + increase:.2f}, rounded to {new_max} ACU")
+                    
+                    # Step 3: Apply change
+                    col4.markdown("\n**Step 3: Applying configuration change...**")
+                    rds.modify_db_cluster(
+                        DBClusterIdentifier=selected_incident['incidentIdentifier'],
+                        ServerlessV2ScalingConfiguration={
+                            'MinCapacity': current_min,
+                            'MaxCapacity': new_max
+                        },
+                        ApplyImmediately=True
+                    )
+                    col4.markdown("✅ Modification initiated")
+                    
+                    # Step 4: Verify
+                    import time
+                    time.sleep(3)
+                    col4.markdown("\n**Step 4: Verifying change...**")
+                    
+                    verify_config = rds.describe_db_clusters(
+                        DBClusterIdentifier=selected_incident['incidentIdentifier']
+                    )['DBClusters'][0]['ServerlessV2ScalingConfiguration']
+                    
+                    if verify_config['MaxCapacity'] == new_max:
+                        col4.markdown(f"✅ Verified: MaxCapacity is now {new_max} ACU")
+                        
+                        # Step 5: Update incident status
+                        col4.markdown("\n**Step 5: Updating incident status...**")
+                        dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
+                        table = dynamodb.Table(DYNAMODB_TABLE)
+                        
+                        table.update_item(
+                            Key={
+                                'pk': f"INCIDENT#{selected_incident['incident_id']}",
+                                'sk': f"ALARM#{selected_incident.get('alarm_name', 'unknown')}"
+                            },
+                            UpdateExpression='SET incident_status = :status, resolution_notes = :notes, updated_at = :time',
+                            ExpressionAttributeValues={
+                                ':status': 'RESOLVED',
+                                ':notes': f"Increased MaxCapacity from {current_max} to {new_max} ACU (20% increase)",
+                                ':time': datetime.now().isoformat()
+                            }
+                        )
+                        col4.success(f"✅ Incident resolved! MaxCapacity increased from {current_max} to {new_max} ACU")
                     else:
-                        col4.warning("⚠️ Remediation attempted but not marked as resolved. Check verification results above.")
+                        col4.warning(f"⚠️ Verification pending. Current MaxCapacity: {verify_config['MaxCapacity']}")
+                        
+                except Exception as e:
+                    col4.error(f"❌ Error during remediation: {str(e)}")
 
 def show_all_incidents():
     """Show all incidents page"""
@@ -613,61 +637,77 @@ def show_pending_incidents():
             col4.error("Please select an incident to auto-remediate")
         else:
             with col4.status("Remediating incident..."):
-                # Use agent with AWS API MCP server (call_aws tool)
-                remediation_response = agent(
-                    f"""Remediate {selected_incident['incidentType']} incident for cluster {selected_incident['incidentIdentifier']}.
-
-**Steps:**
-1. Use call_aws to get current ServerlessV2ScalingConfiguration:
-   aws rds describe-db-clusters --db-cluster-identifier {selected_incident['incidentIdentifier']} --region us-west-2 --query "DBClusters[0].ServerlessV2ScalingConfiguration"
-
-2. Calculate new MaxCapacity (add 0.5 to current value)
-
-3. Use call_aws to modify the cluster:
-   aws rds modify-db-cluster --db-cluster-identifier {selected_incident['incidentIdentifier']} --region us-west-2 --serverless-v2-scaling-configuration MinCapacity=<current>,MaxCapacity=<new> --apply-immediately
-
-4. Confirm the change was applied
-
-Provide summary: "Increased MaxCapacity from X to Y ACU"
-"""
-                )
-                
-                # Clean response - remove tool invocation tags
-                if isinstance(remediation_response, str):
-                    import re
-                    clean_response = remediation_response
-                    # Remove call_aws tags and content
-                    clean_response = re.sub(r'<call_aws>.*?</call_aws>', '[AWS Command Executed]', clean_response, flags=re.DOTALL)
-                    # Remove other invoke tags
-                    clean_response = re.sub(r'<invoke[^>]*>.*?</invoke>', '', clean_response, flags=re.DOTALL)
-                    clean_response = re.sub(r'<invoke[^>]*>', '', clean_response)
-                    clean_response = clean_response.strip()
-                else:
-                    clean_response = str(remediation_response)
-                
-                # Update incident status
+                # Direct AWS remediation
                 import boto3
-                dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
-                table = dynamodb.Table(DYNAMODB_TABLE)
-                query_response = table.query(
-                    KeyConditionExpression='pk = :pk',
-                    ExpressionAttributeValues={':pk': f'INCIDENT#{selected_incident["incident_id"]}'}
-                )
                 
-                if query_response['Items']:
-                    sk = query_response['Items'][0]['sk']
-                    table.update_item(
-                        Key={'pk': f'INCIDENT#{selected_incident["incident_id"]}', 'sk': sk},
-                        UpdateExpression='SET incident_status = :status, updated_at = :updated_at',
-                        ExpressionAttributeValues={
-                            ':status': 'RESOLVED',
-                            ':updated_at': datetime.now().isoformat()
-                        }
+                col4.markdown(f"***Auto-remediation for {selected_incident['incident_id']}***")
+                
+                try:
+                    rds = boto3.client('rds', region_name=AWS_REGION)
+                    
+                    # Step 1: Get current config
+                    col4.markdown("**Step 1: Getting current configuration...**")
+                    current_config = rds.describe_db_clusters(
+                        DBClusterIdentifier=selected_incident['incidentIdentifier']
+                    )['DBClusters'][0]['ServerlessV2ScalingConfiguration']
+                    
+                    current_min = current_config['MinCapacity']
+                    current_max = current_config['MaxCapacity']
+                    col4.markdown(f"✅ Current: MinCapacity={current_min}, MaxCapacity={current_max}")
+                    
+                    # Step 2: Calculate new value (20% increase, rounded to 0.5 increments)
+                    col4.markdown("\n**Step 2: Calculating new MaxCapacity (20% increase)...**")
+                    increase = current_max * 0.2
+                    new_max = current_max + (round(increase / 0.5) * 0.5)  # Round to nearest 0.5
+                    col4.markdown(f"✅ Calculated: {current_max} + 20% = {current_max + increase:.2f}, rounded to {new_max} ACU")
+                    
+                    # Step 3: Apply change
+                    col4.markdown("\n**Step 3: Applying configuration change...**")
+                    rds.modify_db_cluster(
+                        DBClusterIdentifier=selected_incident['incidentIdentifier'],
+                        ServerlessV2ScalingConfiguration={
+                            'MinCapacity': current_min,
+                            'MaxCapacity': new_max
+                        },
+                        ApplyImmediately=True
                     )
-                
-                col4.markdown(f"***Status of auto remediation for {selected_incident['incident_id']}***")
-                col4.markdown(clean_response)
-                col4.success("Remediation completed!")
+                    col4.markdown("✅ Modification initiated")
+                    
+                    # Step 4: Verify
+                    import time
+                    time.sleep(3)
+                    col4.markdown("\n**Step 4: Verifying change...**")
+                    
+                    verify_config = rds.describe_db_clusters(
+                        DBClusterIdentifier=selected_incident['incidentIdentifier']
+                    )['DBClusters'][0]['ServerlessV2ScalingConfiguration']
+                    
+                    if verify_config['MaxCapacity'] == new_max:
+                        col4.markdown(f"✅ Verified: MaxCapacity is now {new_max} ACU")
+                        
+                        # Step 5: Update incident status
+                        col4.markdown("\n**Step 5: Updating incident status...**")
+                        dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
+                        table = dynamodb.Table(DYNAMODB_TABLE)
+                        
+                        table.update_item(
+                            Key={
+                                'pk': f"INCIDENT#{selected_incident['incident_id']}",
+                                'sk': f"ALARM#{selected_incident.get('alarm_name', 'unknown')}"
+                            },
+                            UpdateExpression='SET incident_status = :status, resolution_notes = :notes, updated_at = :time',
+                            ExpressionAttributeValues={
+                                ':status': 'RESOLVED',
+                                ':notes': f"Increased MaxCapacity from {current_max} to {new_max} ACU (20% increase)",
+                                ':time': datetime.now().isoformat()
+                            }
+                        )
+                        col4.success(f"✅ Incident resolved! MaxCapacity increased from {current_max} to {new_max} ACU")
+                    else:
+                        col4.warning(f"⚠️ Verification pending. Current MaxCapacity: {verify_config['MaxCapacity']}")
+                        
+                except Exception as e:
+                    col4.error(f"❌ Error during remediation: {str(e)}")
 
 def show_all_incidents():
     """Show all incidents page"""
