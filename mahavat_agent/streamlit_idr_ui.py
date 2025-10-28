@@ -247,8 +247,26 @@ def show_pending_incidents():
                 
                 if response['retrievalResults']:
                     runbook_text = response['retrievalResults'][0]['content']['text']
+                    
+                    # Format the runbook text properly
+                    formatted_text = runbook_text.replace('## ', '
+
+## ').replace('# ', '
+# ')
+                    formatted_text = formatted_text.replace('. 1.', '.
+
+1.').replace('. 2.', '.
+
+2.')
+                    formatted_text = formatted_text.replace('. 3.', '.
+
+3.').replace('. 4.', '.
+
+4.')
+                    formatted_text = formatted_text.strip()
+                    
                     col4.markdown(f"***Runbook Instructions for {selected_incident['incident_id']}***")
-                    col4.markdown(runbook_text)
+                    col4.markdown(formatted_text)
                 else:
                     col4.error("No runbook found")
     
@@ -605,8 +623,26 @@ def show_pending_incidents():
                 
                 if response['retrievalResults']:
                     runbook_text = response['retrievalResults'][0]['content']['text']
+                    
+                    # Format the runbook text properly
+                    formatted_text = runbook_text.replace('## ', '
+
+## ').replace('# ', '
+# ')
+                    formatted_text = formatted_text.replace('. 1.', '.
+
+1.').replace('. 2.', '.
+
+2.')
+                    formatted_text = formatted_text.replace('. 3.', '.
+
+3.').replace('. 4.', '.
+
+4.')
+                    formatted_text = formatted_text.strip()
+                    
                     col4.markdown(f"***Runbook Instructions for {selected_incident['incident_id']}***")
-                    col4.markdown(runbook_text)
+                    col4.markdown(formatted_text)
                 else:
                     col4.error("No runbook found")
 
