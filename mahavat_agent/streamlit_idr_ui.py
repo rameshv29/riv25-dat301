@@ -231,20 +231,26 @@ def show_pending_incidents():
             col4.error("Please select an incident to get the runbook")
         else:
             with col4.status("Retrieving incident runbook..."):
-                runbook_response = agent(
-                    f"""Use the "retrieve" tool to get the runbook.
-
-Tool: retrieve
-Parameters:
-- knowledge_base_id: {IDR_KB_ID}
-- query: {selected_incident['incidentType']} remediation
-- max_results: 1
-
-Return ONLY the text from the first result. Do not generate content."""
+                # Direct KB retrieval without agent processing
+                import boto3
+                bedrock = boto3.client('bedrock-agent-runtime', region_name=AWS_REGION)
+                
+                response = bedrock.retrieve(
+                    knowledgeBaseId=IDR_KB_ID,
+                    retrievalQuery={'text': f"{selected_incident['incidentType']} remediation"},
+                    retrievalConfiguration={
+                        'vectorSearchConfiguration': {
+                            'numberOfResults': 1
+                        }
+                    }
                 )
                 
-                col4.markdown(f"***Runbook Instructions for {selected_incident['incident_id']}***")
-                col4.markdown(runbook_response)
+                if response['retrievalResults']:
+                    runbook_text = response['retrievalResults'][0]['content']['text']
+                    col4.markdown(f"***Runbook Instructions for {selected_incident['incident_id']}***")
+                    col4.markdown(runbook_text)
+                else:
+                    col4.error("No runbook found")
     
     # Remediate action
     if remediate_action:
@@ -583,35 +589,27 @@ def show_pending_incidents():
             col4.error("Please select an incident to get the runbook")
         else:
             with col4.status("Retrieving incident runbook..."):
-                runbook_response = agent(
-                    f"""Use the "retrieve" tool to get the runbook.
-
-Tool: retrieve
-Parameters:
-- knowledge_base_id: {IDR_KB_ID}
-- query: {selected_incident['incidentType']} remediation
-- max_results: 1
-
-Return ONLY the text from the first result. Do not generate content."""
+                # Direct KB retrieval without agent processing
+                import boto3
+                bedrock = boto3.client('bedrock-agent-runtime', region_name=AWS_REGION)
+                
+                response = bedrock.retrieve(
+                    knowledgeBaseId=IDR_KB_ID,
+                    retrievalQuery={'text': f"{selected_incident['incidentType']} remediation"},
+                    retrievalConfiguration={
+                        'vectorSearchConfiguration': {
+                            'numberOfResults': 1
+                        }
+                    }
                 )
                 
-                # Extract only text content, skip tool invocations
-                if isinstance(runbook_response, str):
-                    import re
-                    # Remove all tool invocation patterns
-                    clean_response = runbook_response
-                    # Remove multi-line invoke tags
-                    clean_response = re.sub(r'<invoke[^>]*>.*?</invoke>', '', clean_response, flags=re.DOTALL)
-                    # Remove single-line invoke tags
-                    clean_response = re.sub(r'<invoke[^>]*>', '', clean_response)
-                    # Remove any remaining XML-like tags
-                    clean_response = re.sub(r'<[^>]+>', '', clean_response)
-                    clean_response = clean_response.strip()
+                if response['retrievalResults']:
+                    runbook_text = response['retrievalResults'][0]['content']['text']
+                    col4.markdown(f"***Runbook Instructions for {selected_incident['incident_id']}***")
+                    col4.markdown(runbook_text)
                 else:
-                    clean_response = str(runbook_response)
-                
-                col4.markdown(f"***Runbook Instructions for {selected_incident['incident_id']}***")
-                col4.markdown(clean_response)
+                    col4.error("No runbook found")
+
     
     # Remediate action
     if remediate_action:
