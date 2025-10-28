@@ -103,8 +103,13 @@ def create_idr_agent():
    - update_incident_status: Update incident to RESOLVED (ONLY after verification)
 
 2. **Bedrock KB Retrieval MCP Server** (runbooks):
-   - retrieve: Search knowledge base ID {IDR_KB_ID} for remediation runbooks
-   - Use this to get runbook content - DO NOT modify or summarize the runbook text
+   - Tool name: "retrieve"
+   - Parameters:
+     * knowledge_base_id: "{IDR_KB_ID}"
+     * query: "search text"
+     * max_results: 1-5
+   - Returns: List of results with 'text' field containing runbook content
+   - CRITICAL: Use the EXACT tool name "retrieve" - no other variations
 
 3. **AWS API MCP Server** (remediation):
    - call_aws: Execute AWS CLI commands
@@ -112,7 +117,7 @@ def create_idr_agent():
 
 **Remediation Workflow:**
 
-1. **Get the runbook**: Use retrieve tool to get the remediation runbook for the incident type
+1. **Get the runbook**: Call "retrieve" tool with knowledge_base_id="{IDR_KB_ID}" and query="<incident_type> remediation"
 2. **Follow the runbook steps EXACTLY**: The runbook contains specific logic and conditions
 3. **Execute each step**: Use call_aws to check status, get metrics, get current config
 4. **Apply changes per runbook**: Follow the runbook's calculation logic (e.g., "increase by 20%")
@@ -227,19 +232,15 @@ def show_pending_incidents():
         else:
             with col4.status("Retrieving incident runbook..."):
                 runbook_response = agent(
-                    f"""TASK: Retrieve the EXACT runbook text for {selected_incident['incidentType']} incident.
+                    f"""Use the "retrieve" tool to get the runbook.
 
-STEPS:
-1. Call the 'retrieve' tool with:
-   - knowledge_base_id: {IDR_KB_ID}
-   - query: "{selected_incident['incidentType']} remediation runbook"
-   - max_results: 1
+Tool: retrieve
+Parameters:
+- knowledge_base_id: {IDR_KB_ID}
+- query: {selected_incident['incidentType']} remediation
+- max_results: 1
 
-2. Extract the 'text' field from the first result
-
-3. Return ONLY that text content - NO summary, NO explanation, NO modifications
-
-CRITICAL: Your response must be ONLY the raw runbook markdown text from the retrieve tool result."""
+Return ONLY the text from the first result. Do not generate content."""
                 )
                 
                 col4.markdown(f"***Runbook Instructions for {selected_incident['incident_id']}***")
@@ -583,19 +584,15 @@ def show_pending_incidents():
         else:
             with col4.status("Retrieving incident runbook..."):
                 runbook_response = agent(
-                    f"""TASK: Retrieve the EXACT runbook text for {selected_incident['incidentType']} incident.
+                    f"""Use the "retrieve" tool to get the runbook.
 
-STEPS:
-1. Call the 'retrieve' tool with:
-   - knowledge_base_id: {IDR_KB_ID}
-   - query: "{selected_incident['incidentType']} remediation runbook"
-   - max_results: 1
+Tool: retrieve
+Parameters:
+- knowledge_base_id: {IDR_KB_ID}
+- query: {selected_incident['incidentType']} remediation
+- max_results: 1
 
-2. Extract the 'text' field from the first result
-
-3. Return ONLY that text content - NO summary, NO explanation, NO modifications
-
-CRITICAL: Your response must be ONLY the raw runbook markdown text from the retrieve tool result."""
+Return ONLY the text from the first result. Do not generate content."""
                 )
                 
                 # Extract only text content, skip tool invocations
