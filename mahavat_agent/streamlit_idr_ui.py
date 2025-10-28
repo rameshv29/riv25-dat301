@@ -103,13 +103,8 @@ def create_idr_agent():
    - update_incident_status: Update incident to RESOLVED (ONLY after verification)
 
 2. **Bedrock KB Retrieval MCP Server** (runbooks):
-   - Tool name: "retrieve"
-   - Parameters:
-     * knowledge_base_id: "{IDR_KB_ID}"
-     * query: "search text"
-     * max_results: 1-5
-   - Returns: List of results with 'text' field containing runbook content
-   - CRITICAL: Use the EXACT tool name "retrieve" - no other variations
+   - retrieve: Search knowledge base ID {IDR_KB_ID} for remediation runbooks
+   - Use this to get runbook content - DO NOT modify or summarize the runbook text
 
 3. **AWS API MCP Server** (remediation):
    - call_aws: Execute AWS CLI commands
@@ -117,7 +112,7 @@ def create_idr_agent():
 
 **Remediation Workflow:**
 
-1. **Get the runbook**: Call "retrieve" tool with knowledge_base_id="{IDR_KB_ID}" and query="<incident_type> remediation"
+1. **Get the runbook**: Use retrieve tool to get the remediation runbook for the incident type
 2. **Follow the runbook steps EXACTLY**: The runbook contains specific logic and conditions
 3. **Execute each step**: Use call_aws to check status, get metrics, get current config
 4. **Apply changes per runbook**: Follow the runbook's calculation logic (e.g., "increase by 20%")
@@ -231,45 +226,28 @@ def show_pending_incidents():
             col4.error("Please select an incident to get the runbook")
         else:
             with col4.status("Retrieving incident runbook..."):
-                # Direct KB retrieval without agent processing
+                # Direct KB retrieval
                 import boto3
                 bedrock = boto3.client('bedrock-agent-runtime', region_name=AWS_REGION)
-                
                 response = bedrock.retrieve(
                     knowledgeBaseId=IDR_KB_ID,
                     retrievalQuery={'text': f"{selected_incident['incidentType']} remediation"},
-                    retrievalConfiguration={
-                        'vectorSearchConfiguration': {
-                            'numberOfResults': 1
-                        }
-                    }
+                    retrievalConfiguration={'vectorSearchConfiguration': {'numberOfResults': 1}}
                 )
-                
                 if response['retrievalResults']:
                     runbook_text = response['retrievalResults'][0]['content']['text']
-                    
-                    # Format the runbook text properly
-                    formatted_text = runbook_text.replace('## ', '
-
-## ').replace('# ', '
-# ')
-                    formatted_text = formatted_text.replace('. 1.', '.
-
-1.').replace('. 2.', '.
-
-2.')
-                    formatted_text = formatted_text.replace('. 3.', '.
-
-3.').replace('. 4.', '.
-
-4.')
-                    formatted_text = formatted_text.strip()
-                    
-                    col4.markdown(f"***Runbook Instructions for {selected_incident['incident_id']}***")
-                    col4.markdown(formatted_text)
+                    # Format the text
+                    runbook_text = runbook_text.replace("# Title", "**Title:**")
+                    runbook_text = runbook_text.replace("## ", "\n\n**").replace(" ##", ":**")
+                    runbook_text = runbook_text.replace(". 1.", ".\n\n1.")
+                    runbook_text = runbook_text.replace(". 2.", ".\n\n2.")
+                    runbook_text = runbook_text.replace(". 3.", ".\n\n3.")
+                    runbook_text = runbook_text.replace(". 4.", ".\n\n4.")
                 else:
-                    col4.error("No runbook found")
-    
+                    runbook_text = "No runbook found"
+                
+                col4.markdown(f"***Runbook Instructions for {selected_incident['incident_id']}***")
+                col4.markdown(runbook_text)
     # Remediate action
     if remediate_action:
         if selected_incident is None:
@@ -607,46 +585,28 @@ def show_pending_incidents():
             col4.error("Please select an incident to get the runbook")
         else:
             with col4.status("Retrieving incident runbook..."):
-                # Direct KB retrieval without agent processing
+                # Direct KB retrieval
                 import boto3
                 bedrock = boto3.client('bedrock-agent-runtime', region_name=AWS_REGION)
-                
                 response = bedrock.retrieve(
                     knowledgeBaseId=IDR_KB_ID,
                     retrievalQuery={'text': f"{selected_incident['incidentType']} remediation"},
-                    retrievalConfiguration={
-                        'vectorSearchConfiguration': {
-                            'numberOfResults': 1
-                        }
-                    }
+                    retrievalConfiguration={'vectorSearchConfiguration': {'numberOfResults': 1}}
                 )
-                
                 if response['retrievalResults']:
                     runbook_text = response['retrievalResults'][0]['content']['text']
-                    
-                    # Format the runbook text properly
-                    formatted_text = runbook_text.replace('## ', '
-
-## ').replace('# ', '
-# ')
-                    formatted_text = formatted_text.replace('. 1.', '.
-
-1.').replace('. 2.', '.
-
-2.')
-                    formatted_text = formatted_text.replace('. 3.', '.
-
-3.').replace('. 4.', '.
-
-4.')
-                    formatted_text = formatted_text.strip()
-                    
-                    col4.markdown(f"***Runbook Instructions for {selected_incident['incident_id']}***")
-                    col4.markdown(formatted_text)
+                    # Format the text
+                    runbook_text = runbook_text.replace("# Title", "**Title:**")
+                    runbook_text = runbook_text.replace("## ", "\n\n**").replace(" ##", ":**")
+                    runbook_text = runbook_text.replace(". 1.", ".\n\n1.")
+                    runbook_text = runbook_text.replace(". 2.", ".\n\n2.")
+                    runbook_text = runbook_text.replace(". 3.", ".\n\n3.")
+                    runbook_text = runbook_text.replace(". 4.", ".\n\n4.")
                 else:
-                    col4.error("No runbook found")
-
-    
+                    runbook_text = "No runbook found"
+                
+                col4.markdown(f"***Runbook Instructions for {selected_incident['incident_id']}***")
+                col4.markdown(runbook_text)
     # Remediate action
     if remediate_action:
         if selected_incident is None:
