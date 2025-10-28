@@ -37,6 +37,6 @@ echo "   DynamoDB: $DYNAMODB_TABLE"
 source /workshop/mahavat_agent/venv/bin/activate
 
 # Start IDR agent
-streamlit run streamlit_idr_ui.py --server.port 8501 --server.address 0.0.0.0
+streamlit run streamlit_idr_ui_mcp.py --server.port 8501 --server.address 0.0.0.0
 
 echo "✅ IDR Agent ready! Access at http://localhost:8501"
