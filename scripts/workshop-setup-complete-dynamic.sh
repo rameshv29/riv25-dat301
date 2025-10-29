@@ -123,10 +123,10 @@ BASHRC_EOF
 
 echo "✅ psql functions created"
 
-# Create comprehensive profile.d with all environment variables
+# Create comprehensive bashrc with all environment variables
 echo "🔧 Creating workshop environment variables..."
-cat > /etc/profile.d/workshop-env.sh << PROFILE_EOF
-#!/bin/bash
+cat >> /home/ec2-user/.bashrc << BASHRC_ENV_EOF
+
 # DAT301 Workshop Environment Variables (Dynamic)
 
 # AWS Configuration
@@ -194,9 +194,8 @@ fi
 alias workshop-env='env | grep -E "(AWS_|RDS_|DATABASE_|IDR_|PGHOST|PGPORT|PGUSER|PGDATABASE|KB_ID|DYNAMODB)" | sort'
 
 echo "DAT301 Workshop environment loaded! Use 'workshop-env' to see all variables."
-PROFILE_EOF
+BASHRC_ENV_EOF
 
-chmod +x /etc/profile.d/workshop-env.sh
 echo "✅ Environment variables configured"
 
 # Setup mahavat_agent venv
@@ -211,7 +210,31 @@ fi
 
 # Activate and install requirements
 source venv/bin/activate
-pip3 install -q -r requirements.txt
+
+# Create corrected requirements.txt with proper strands package names
+cat > requirements-corrected.txt << 'REQ_EOF'
+strands-agents
+strands-agents-tools
+boto3
+psycopg2-binary
+langchain
+langchain-community
+pypdf
+docx2txt
+unstructured
+markdown
+pdfminer
+streamlit
+beautifulsoup4
+requests
+pgvector
+plotly
+psycopg[binary]>=3.1.0
+psycopg-pool>=3.1.0
+REQ_EOF
+
+echo "📦 Installing Python dependencies..."
+pip3 install -q -r requirements-corrected.txt
 deactivate
 
 echo "✅ Python dependencies installed"
