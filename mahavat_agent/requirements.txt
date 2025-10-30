@@ -1,5 +1,5 @@
-strands-agents>=0.1.0
-strands-agents-tools>=0.1.0
+strands-agents>=1.13.0
+strands-agents-tools>=0.2.12
 boto3
 psycopg2-binary
 langchain
