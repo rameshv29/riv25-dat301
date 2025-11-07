@@ -840,31 +840,23 @@ class PostgreSQLRunbooks:
                 "query": """
                     SELECT 
                         pid,
-                        datname,
-                        usename,
+                        datname AS database_name,
+                        usename AS username,
                         application_name,
                         state,
-                        EXTRACT(EPOCH FROM (now() - xact_start))::integer AS xact_duration_seconds,
+                        EXTRACT(EPOCH FROM (now() - xact_start))::integer AS transaction_duration_seconds,
                         EXTRACT(EPOCH FROM (now() - query_start))::integer AS query_duration_seconds,
-                        xact_start,
-                        backend_xmin,
-                        CASE 
-                            WHEN backend_xmin IS NOT NULL THEN age(backend_xmin)
-                            ELSE NULL
-                        END as xmin_age,
-                        CASE
-                            WHEN EXTRACT(EPOCH FROM (now() - xact_start)) > 3600 THEN 'CRITICAL - Blocking vacuum (>1hr)'
-                            WHEN EXTRACT(EPOCH FROM (now() - xact_start)) > 1800 THEN 'WARNING - Long transaction (>30min)'
-                            WHEN backend_xmin IS NOT NULL AND age(backend_xmin) > 1000000 THEN 'CRITICAL - Old xmin blocking vacuum'
-                            ELSE 'OK'
-                        END as blocker_status,
+                        xact_start AS transaction_start_time,
+                        wait_event_type,
+                        wait_event,
                         LEFT(query, 100) AS query_preview
                     FROM pg_stat_activity
                     WHERE state != 'idle'
                     AND xact_start IS NOT NULL
                     AND backend_type = 'client backend'
                     AND pid != pg_backend_pid()
-                    ORDER BY xact_duration_seconds DESC, xmin_age DESC NULLS LAST;
+                    ORDER BY transaction_duration_seconds DESC
+                    LIMIT 15;
                 """,
                 "DatabaseInstance": DatabaseInstance
             },
@@ -1273,29 +1265,29 @@ class PostgreSQLRunbooks:
                 "action": f"Analyze index usage patterns and identify missing or unused indexes{' for ' + table_name if table_name else ''}",
                 "query": f"""
                     SELECT 
-                        schemaname,
-                        tablename,
-                        indexname,
-                        idx_scan as index_scans,
-                        idx_tup_read as tuples_read,
-                        idx_tup_fetch as tuples_fetched,
+                        pui.schemaname,
+                        pui.relname as tablename,
+                        pui.indexrelname as indexname,
+                        pui.idx_scan as index_scans,
+                        pui.idx_tup_read as tuples_read,
+                        pui.idx_tup_fetch as tuples_fetched,
                         CASE 
-                            WHEN idx_scan = 0 THEN 'UNUSED INDEX - Consider dropping'
-                            WHEN idx_scan < 10 AND pg_relation_size(indexrelid) > 1024*1024 THEN 'RARELY USED LARGE INDEX'
-                            WHEN idx_tup_read > idx_tup_fetch * 100 THEN 'INEFFICIENT INDEX - High read/fetch ratio'
+                            WHEN pui.idx_scan = 0 THEN 'UNUSED INDEX - Consider dropping'
+                            WHEN pui.idx_scan < 10 AND pg_relation_size(pui.indexrelid) > 1024*1024 THEN 'RARELY USED LARGE INDEX'
+                            WHEN pui.idx_tup_read > pui.idx_tup_fetch * 100 THEN 'INEFFICIENT INDEX - High read/fetch ratio'
                             ELSE 'OK'
                         END as index_status,
-                        pg_size_pretty(pg_relation_size(indexrelid)) as index_size
+                        pg_size_pretty(pg_relation_size(pui.indexrelid)) as index_size
                     FROM pg_stat_user_indexes pui
                     JOIN pg_stat_user_tables put ON pui.relid = put.relid
-                    WHERE put.n_live_tup > 0 {table_filter.replace('relname', 'tablename') if table_filter else ''}
+                    WHERE put.n_live_tup > 0
                     ORDER BY 
                         CASE 
-                            WHEN idx_scan = 0 THEN 1
-                            WHEN idx_scan < 10 AND pg_relation_size(indexrelid) > 1024*1024 THEN 2
+                            WHEN pui.idx_scan = 0 THEN 1
+                            WHEN pui.idx_scan < 10 AND pg_relation_size(pui.indexrelid) > 1024*1024 THEN 2
                             ELSE 3
                         END,
-                        pg_relation_size(indexrelid) DESC;
+                        pg_relation_size(pui.indexrelid) DESC;
                 """,
                 "DatabaseInstance": DatabaseInstance
             },
@@ -1348,9 +1340,9 @@ class PostgreSQLRunbooks:
                     SELECT 
                         LEFT(query, 100) as query_preview,
                         calls,
-                        total_time,
-                        round(total_time/calls, 2) as avg_time_ms,
-                        round((100.0 * total_time / sum(total_time) OVER()), 2) as percent_total_time,
+                        round(total_exec_time::numeric, 2) as total_time,
+                        round((total_exec_time/calls)::numeric, 2) as avg_time_ms,
+                        round(((100.0 * total_exec_time / sum(total_exec_time) OVER()))::numeric, 2) as percent_total_time,
                         rows,
                         round(rows::numeric/calls, 2) as avg_rows,
                         shared_blks_hit,
@@ -1361,14 +1353,14 @@ class PostgreSQLRunbooks:
                             ELSE 0 
                         END as cache_hit_percent,
                         CASE 
-                            WHEN total_time/calls > 1000 THEN 'SLOW - Avg >1s per call'
+                            WHEN total_exec_time/calls > 1000 THEN 'SLOW - Avg >1s per call'
                             WHEN shared_blks_read > shared_blks_hit THEN 'I/O INTENSIVE - Low cache hit ratio'
-                            WHEN calls > 10000 AND total_time/calls > 100 THEN 'HIGH FREQUENCY SLOW QUERY'
+                            WHEN calls > 10000 AND total_exec_time/calls > 100 THEN 'HIGH FREQUENCY SLOW QUERY'
                             ELSE 'OK'
                         END as performance_issue
                     FROM pg_stat_statements 
                     WHERE calls > 10
-                    ORDER BY total_time DESC 
+                    ORDER BY total_exec_time DESC 
                     LIMIT 20;
                 """,
                 "DatabaseInstance": DatabaseInstance
@@ -2391,28 +2383,28 @@ def analyze_query_plan_degradation(query_text: str, table_name: str = None) -> d
             "index_efficiency_with_bloat": """
                 -- INDEX EFFICIENCY DEGRADATION DUE TO BLOAT
                 SELECT 
-                    schemaname,
-                    tablename,
-                    indexname,
-                    idx_scan,
-                    idx_tup_read,
-                    idx_tup_fetch,
+                    pui.schemaname,
+                    pui.relname as tablename,
+                    pui.indexrelname as indexname,
+                    pui.idx_scan,
+                    pui.idx_tup_read,
+                    pui.idx_tup_fetch,
                     CASE 
-                        WHEN idx_tup_read > 0 AND idx_tup_fetch > 0 
-                        THEN round((idx_tup_fetch::numeric / idx_tup_read) * 100, 2)
+                        WHEN pui.idx_tup_read > 0 AND pui.idx_tup_fetch > 0 
+                        THEN round((pui.idx_tup_fetch::numeric / pui.idx_tup_read) * 100, 2)
                         ELSE 0
                     END as index_selectivity_percent,
                     CASE 
-                        WHEN idx_tup_read > idx_tup_fetch * 5 THEN 'HIGH BLOAT IMPACT - Index reading many dead tuples'
-                        WHEN idx_tup_read > idx_tup_fetch * 2 THEN 'MODERATE BLOAT IMPACT - Some dead tuple reads'
+                        WHEN pui.idx_tup_read > pui.idx_tup_fetch * 5 THEN 'HIGH BLOAT IMPACT - Index reading many dead tuples'
+                        WHEN pui.idx_tup_read > pui.idx_tup_fetch * 2 THEN 'MODERATE BLOAT IMPACT - Some dead tuple reads'
                         ELSE 'LOW BLOAT IMPACT - Index efficiency good'
                     END as bloat_impact_on_index,
-                    pg_size_pretty(pg_relation_size(indexrelid)) as index_size
+                    pg_size_pretty(pg_relation_size(pui.indexrelid)) as index_size
                 FROM pg_stat_user_indexes pui
                 JOIN pg_stat_user_tables put ON pui.relid = put.relid
                 WHERE put.relname = COALESCE('{table_name}', put.relname)
-                AND idx_scan > 0
-                ORDER BY idx_scan DESC;
+                AND pui.idx_scan > 0
+                ORDER BY pui.idx_scan DESC;
             """
         },
         "plan_comparison_explanation": {
