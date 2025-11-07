@@ -2182,54 +2182,52 @@ def detect_all_vacuum_blockers_immediately() -> dict:
         "queries": {
             "idle_and_long_transactions": """
                 -- IMMEDIATE VACUUM BLOCKER DETECTION: Idle & Long Transactions
-                SELECT 
-                    'TRANSACTION BLOCKER' as blocker_category,
-                    CASE 
-                        WHEN state = 'idle in transaction' THEN 'IDLE IN TRANSACTION'
-                        WHEN state = 'idle in transaction (aborted)' THEN 'IDLE IN TRANSACTION (ABORTED)'
-                        WHEN EXTRACT(EPOCH FROM (now() - xact_start)) > 3600 THEN 'LONG RUNNING TRANSACTION'
-                        WHEN backend_xmin IS NOT NULL AND age(backend_xmin) > 1000000 THEN 'OLD XMIN TRANSACTION'
-                        ELSE 'ACTIVE TRANSACTION'
-                    END as blocker_type,
-                    pid,
-                    datname,
-                    usename,
-                    application_name,
-                    client_addr,
-                    state,
-                    EXTRACT(EPOCH FROM (now() - xact_start))::integer AS xact_duration_seconds,
-                    EXTRACT(EPOCH FROM (now() - state_change))::integer AS state_duration_seconds,
-                    backend_xmin,
-                    CASE 
-                        WHEN backend_xmin IS NOT NULL THEN age(backend_xmin)
-                        ELSE NULL
-                    END as xmin_age,
-                    CASE
-                        WHEN state = 'idle in transaction' THEN 'CRITICAL - BLOCKING VACUUM'
-                        WHEN state = 'idle in transaction (aborted)' THEN 'CRITICAL - BLOCKING VACUUM'
-                        WHEN EXTRACT(EPOCH FROM (now() - xact_start)) > 3600 THEN 'CRITICAL - LONG TRANSACTION'
-                        WHEN backend_xmin IS NOT NULL AND age(backend_xmin) > 1000000 THEN 'CRITICAL - OLD XMIN'
-                        ELSE 'WARNING'
-                    END as severity,
-                    'SELECT pg_terminate_backend(' || pid || ');' as termination_command,
-                    LEFT(query, 100) AS query_preview
-                FROM pg_stat_activity
-                WHERE backend_type = 'client backend'
-                AND pid != pg_backend_pid()
-                AND (
-                    state = 'idle in transaction'
-                    OR state = 'idle in transaction (aborted)'
-                    OR (xact_start IS NOT NULL AND EXTRACT(EPOCH FROM (now() - xact_start)) > 300)
-                    OR (backend_xmin IS NOT NULL AND age(backend_xmin) > 100000)
-                )
-                ORDER BY 
-                    CASE 
-                        WHEN state = 'idle in transaction' THEN 1
-                        WHEN state = 'idle in transaction (aborted)' THEN 2
-                        WHEN EXTRACT(EPOCH FROM (now() - xact_start)) > 3600 THEN 3
-                        ELSE 4
-                    END,
-                    xact_duration_seconds DESC;
+                        SELECT 
+                            'TRANSACTION BLOCKER' as blocker_category,
+                            CASE 
+                                WHEN state = 'idle in transaction' THEN 'IDLE IN TRANSACTION'
+                                WHEN state = 'idle in transaction (aborted)' THEN 'IDLE IN TRANSACTION (ABORTED)'
+                                WHEN EXTRACT(EPOCH FROM (now() - xact_start)) > 3600 THEN 'LONG RUNNING TRANSACTION'
+                                ELSE 'ACTIVE TRANSACTION'
+                            END as blocker_type,
+                            pid,
+                            datname,
+                            usename,
+                            application_name,
+                            client_addr,
+                            state,
+                            EXTRACT(EPOCH FROM (now() - xact_start))::integer AS xact_duration_seconds,
+                            EXTRACT(EPOCH FROM (now() - state_change))::integer AS state_duration_seconds,
+                            CASE
+                                WHEN state = 'idle in transaction' THEN 'CRITICAL - BLOCKING VACUUM'
+                                WHEN state = 'idle in transaction (aborted)' THEN 'CRITICAL - BLOCKING VACUUM'
+                                WHEN EXTRACT(EPOCH FROM (now() - xact_start)) > 3600 THEN 'CRITICAL - LONG TRANSACTION'
+                                WHEN EXTRACT(EPOCH FROM (now() - xact_start)) > 1800 THEN 'WARNING - MODERATE TRANSACTION'
+                                ELSE 'ACTIVE'
+                            END as severity,
+                            CASE 
+                                WHEN state = 'idle in transaction' THEN 'TERMINATE_IMMEDIATELY'
+                                WHEN state = 'idle in transaction (aborted)' THEN 'TERMINATE_IMMEDIATELY'
+                                WHEN EXTRACT(EPOCH FROM (now() - xact_start)) > 3600 THEN 'CONSIDER_TERMINATING'
+                                ELSE 'MONITOR'
+                            END as recommended_action,
+                            LEFT(query, 100) AS query_preview
+                        FROM pg_stat_activity
+                        WHERE backend_type = 'client backend'
+                        AND pid != pg_backend_pid()
+                        AND (
+                            state = 'idle in transaction'
+                            OR state = 'idle in transaction (aborted)'
+                            OR (xact_start IS NOT NULL AND EXTRACT(EPOCH FROM (now() - xact_start)) > 300)
+                        )
+                        ORDER BY 
+                            CASE 
+                                WHEN state = 'idle in transaction' THEN 1
+                                WHEN state = 'idle in transaction (aborted)' THEN 2
+                                WHEN EXTRACT(EPOCH FROM (now() - xact_start)) > 3600 THEN 3
+                                ELSE 4
+                            END,
+                            xact_duration_seconds DESC;
             """,
             "prepared_transactions": """
                 -- PREPARED TRANSACTION BLOCKERS
