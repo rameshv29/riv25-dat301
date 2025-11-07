@@ -578,41 +578,53 @@ class PostgreSQLRunbooks:
                 "tool": "run_query", 
                 "action": "Use pg_stat_statements to find slow queries and correlate with table access patterns",
                 "query": """
-                    SELECT 
-                        LEFT(query, 150) as query_preview,
+                    SELECT
+                        LEFT(query, 150) AS query_preview,
                         calls,
-                        total_time,
-                        round(total_time/calls, 2) as avg_time_ms,
-                        round((100.0 * total_time / sum(total_time) OVER()), 2) as percent_total_time,
+                        round(total_exec_time::NUMERIC, 2) AS total_time,
+                        round((total_exec_time / calls)::NUMERIC, 2) AS avg_time_ms,
+                        round(
+                            (
+                            (
+                                100.0 * total_exec_time / sum(total_exec_time) OVER ()
+                            )
+                            )::NUMERIC,
+                            2
+                        ) AS percent_total_time,
                         rows,
-                        round(rows::numeric/calls, 2) as avg_rows_per_call,
+                        round(rows::NUMERIC / calls, 2) AS avg_rows_per_call,
                         shared_blks_hit,
                         shared_blks_read,
                         shared_blks_dirtied,
                         shared_blks_written,
-                        CASE 
-                            WHEN shared_blks_hit + shared_blks_read > 0 
-                            THEN round((shared_blks_hit::numeric / (shared_blks_hit + shared_blks_read)) * 100, 2)
-                            ELSE 0 
-                        END as cache_hit_percent,
-                        CASE 
-                            WHEN total_time/calls > 5000 THEN 'VERY SLOW - Avg >5s per call'
-                            WHEN total_time/calls > 1000 THEN 'SLOW - Avg >1s per call'
+                        CASE
+                            WHEN shared_blks_hit + shared_blks_read > 0 THEN round(
+                            (
+                                shared_blks_hit::NUMERIC / (shared_blks_hit + shared_blks_read)
+                            ) * 100,
+                            2
+                            )
+                            ELSE 0
+                        END AS cache_hit_percent,
+                        CASE
+                            WHEN total_exec_time / calls > 5000 THEN 'VERY SLOW - Avg >5s per call'
+                            WHEN total_exec_time / calls > 1000 THEN 'SLOW - Avg >1s per call'
                             WHEN shared_blks_read > shared_blks_hit THEN 'I/O INTENSIVE - Low cache hit ratio'
-                            WHEN calls > 10000 AND total_time/calls > 100 THEN 'HIGH FREQUENCY SLOW QUERY'
-                            WHEN rows::numeric/calls > 100000 THEN 'LARGE RESULT SET - May need optimization'
+                            WHEN calls > 10000
+                            AND total_exec_time / calls > 100 THEN 'HIGH FREQUENCY SLOW QUERY'
+                            WHEN rows::NUMERIC / calls > 100000 THEN 'LARGE RESULT SET - May need optimization'
                             ELSE 'OK'
-                        END as performance_classification,
-                        CASE 
+                        END AS performance_classification,
+                        CASE
                             WHEN shared_blks_read > shared_blks_hit THEN 'Check for table bloat, missing indexes, or need for vacuum'
-                            WHEN total_time/calls > 1000 THEN 'Analyze query plan, check for locks, vacuum status'
-                            WHEN rows::numeric/calls > 100000 THEN 'Consider query optimization, indexing, or partitioning'
+                            WHEN total_exec_time / calls > 1000 THEN 'Analyze query plan, check for locks, vacuum status'
+                            WHEN rows::NUMERIC / calls > 100000 THEN 'Consider query optimization, indexing, or partitioning'
                             ELSE 'Monitor'
-                        END as optimization_suggestion
-                    FROM pg_stat_statements 
-                    WHERE calls > 5  -- Focus on queries that run multiple times
-                    ORDER BY total_time DESC 
-                    LIMIT 20;
+                        END AS optimization_suggestion
+                        FROM pg_stat_statements
+                        WHERE calls > 5
+                        ORDER BY total_exec_time DESC
+                        LIMIT 20;
                 """,
                 "DatabaseInstance": DatabaseInstance
             }
@@ -1394,25 +1406,33 @@ class PostgreSQLRunbooks:
                 "tool": "run_query", 
                 "action": "Identify long-running transactions that may be blocking autovacuum",
                 "query": """
-                    SELECT 
+                    SELECT
                         pid,
                         datname AS database_name,
                         usename AS username,
                         application_name,
                         state,
-                        EXTRACT(EPOCH FROM (now() - xact_start))::integer AS transaction_duration_seconds,
-                        EXTRACT(EPOCH FROM (now() - query_start))::integer AS query_duration_seconds,
+                        EXTRACT(
+                            EPOCH
+                            FROM
+                            (now() - xact_start)
+                        )::INTEGER AS transaction_duration_seconds,
+                        EXTRACT(
+                            EPOCH
+                            FROM
+                            (now() - query_start)
+                        )::INTEGER AS query_duration_seconds,
                         xact_start AS transaction_start_time,
                         wait_event_type,
                         wait_event,
                         LEFT(query, 100) AS query_preview
-                    FROM pg_stat_activity
-                    WHERE state != 'idle'
-                    AND xact_start IS NOT NULL
-                    AND backend_type = 'client backend'
-                    AND pid != pg_backend_pid()
-                    ORDER BY transaction_duration DESC
-                    LIMIT 15;
+                        FROM pg_stat_activity
+                        WHERE state != 'idle'
+                        AND xact_start IS NOT NULL
+                        AND backend_type = 'client backend'
+                        AND pid != pg_backend_pid()
+                        ORDER BY transaction_duration_seconds DESC
+                        LIMIT 15;
                 """,
                 "DatabaseInstance": DatabaseInstance
             }
