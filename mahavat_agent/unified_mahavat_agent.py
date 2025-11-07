@@ -108,7 +108,8 @@ def create_available_mcp_clients():
         'aws_api': {
             'params': StdioServerParameters(
                 command="uvx",
-                args=["awslabs.aws-api-mcp-server@latest", "--region", AWS_REGION]
+                args=["awslabs.aws-api-mcp-server@latest", "--region", AWS_REGION],
+                env={"AWS_REGION": AWS_REGION}
             ),
             'required': True,
             'description': 'AWS operations'
@@ -122,20 +123,17 @@ def create_available_mcp_clients():
                     "FASTMCP_LOG_LEVEL": "ERROR"
                 }
             ),
-            'required': False,
+            'required': True,
             'description': 'CloudWatch logs and metrics'
         },
         'performance_insights': {
             'params': StdioServerParameters(
-                command="uvx",
-                args=["awslabs.rds-performance-insights-mcp-server@latest"],  # Correct package name
-                env={
-                    "AWS_REGION": AWS_REGION,
-                    "FASTMCP_LOG_LEVEL": "ERROR"
-                }
+                command="python3",
+                args=[os.path.join(os.path.dirname(__file__), "pi_mcp_server.py")],
+                env={"AWS_REGION": AWS_REGION}
             ),
-            'required': False,
-            'description': 'RDS Performance Insights'
+            'required': True,
+            'description': 'RDS Performance Insights (Dynamic)'
         },
         'aws_docs': {
             'params': StdioServerParameters(
@@ -146,7 +144,7 @@ def create_available_mcp_clients():
                     "FASTMCP_LOG_LEVEL": "ERROR"
                 }
             ),
-            'required': False,
+            'required': True,
             'description': 'AWS documentation'
         }
     }
@@ -166,7 +164,7 @@ def create_available_mcp_clients():
                 ],
                 env={"AWS_REGION": AWS_REGION}
             ),
-            'required': False,
+            'required': True,
             'description': 'PostgreSQL database access'
         }
     
@@ -179,7 +177,7 @@ def create_available_mcp_clients():
                 args=[provider_file],
                 env={"AWS_REGION": AWS_REGION}
             ),
-            'required': False,
+            'required': True,
             'description': 'PostgreSQL diagnostic workflows'
         }
     
@@ -232,10 +230,48 @@ def postgres_diagnostic_specialist(
     if not postgres_mcp_tools:
         return "PostgreSQL diagnostic tools are not available. Please check MCP server initialization."
     
-    # PostgreSQL system prompt
+    # PostgreSQL system prompt with standardized formatting
     postgres_system_prompt = f"""You are a PostgreSQL Database expert with comprehensive MCP server access.
 
 **Available MCP Servers:** {list(mcp_clients.keys())}
+
+**MANDATORY OUTPUT FORMATTING:**
+
+For database analysis, ALWAYS use this EXACT format with smaller headers:
+
+### Comprehensive Analysis
+
+#### Executive Summary
+- **Root Cause:** [Database issue identification]
+- **Impact:** [Performance/availability impact]
+- **Current Constraint:** [Resource/configuration limits]
+- **Health Status:** [Critical/Degraded/Warning/Healthy]
+
+#### Key Findings from Multi-Tool Analysis
+
+##### AWS API Analysis
+- **Cluster Status:** [RDS cluster state]
+- **Configuration:** [Database parameters]
+- **Resource Utilization:** [CPU/Memory/Storage]
+
+##### Performance Insights Results
+- **Metrics Status:** [PI availability]
+- **Top Wait Events:** [Blocking events]
+- **SQL Performance:** [Query performance data]
+
+##### PostgreSQL Diagnostics (via RDS Data API)
+- **Problematic Query:** [Slow/blocking queries]
+- **Query Cost:** [Execution plans/costs]
+- **Active PIDs:** [Session information]
+- **Connection Count:** [Active connections]
+
+##### CloudWatch Analysis
+- **Database Metrics:** [CPU/Memory trends]
+- **Log Insights:** [Error patterns]
+- **Performance Trends:** [Historical data]
+
+#### Recommendations
+[Specific database optimization recommendations]
 
 **WORKFLOW-FIRST Approach:**
 • vacuum/bloat/autovacuum → vacuum_analysis_diagnostic()
@@ -246,7 +282,7 @@ def postgres_diagnostic_specialist(
 **Multi-Server Capabilities:**
 • PostgreSQL: Direct SQL execution and database analysis
 • Performance Insights: RDS metrics and top SQL queries
-• CloudWatch: Log analysis and infrastructure metrics
+• CloudWatch: Log analysis and infrastructure metrics (Default: /aws/rds/cluster/dat301-ws-cluster/postgresql)
 • AWS API: RDS configuration and parameter analysis
 • AWS Docs: Best practices and troubleshooting guides
 • Main KB: Runbook retrieval (ID: {MAIN_KB_ID})
@@ -254,6 +290,8 @@ def postgres_diagnostic_specialist(
 **CRITICAL Rules:**
 - Use all available tools for comprehensive analysis
 - ALWAYS include --region {AWS_REGION} in AWS commands
+- For CloudWatch: Use default log group /aws/rds/cluster/dat301-ws-cluster/postgresql unless user specifies otherwise
+- Confirm log group with user if needed: "I'll analyze logs from /aws/rds/cluster/dat301-ws-cluster/postgresql. Is this correct?"
 - Provide multi-dimensional analysis combining database + infrastructure data
 - Execute parallel analysis across multiple MCP servers when possible
 
@@ -314,21 +352,108 @@ def idr_incident_specialist(
     if not idr_mcp_tools:
         return "IDR tools are not available. Please check MCP server initialization."
     
-    # IDR system prompt
-    idr_system_prompt = f"""You are an AWS incident remediation specialist.
+    # IDR system prompt with standardized formatting
+    idr_system_prompt = f"""You are an AWS incident analysis and remediation specialist.
 
 **Available MCP Servers:** {list(mcp_clients.keys())}
+
+**MANDATORY OUTPUT FORMATTING:**
+
+For runbook analysis, ALWAYS use this EXACT format with smaller headers:
+
+### Comprehensive Analysis
+
+#### Executive Summary
+- **Root Cause:** [Identify the primary cause]
+- **Impact:** [Describe business/service impact]  
+- **Current Constraint:** [Identify limiting factors]
+- **Health Status:** [Critical/Degraded/Warning/Healthy]
+
+#### Key Findings from Multi-Tool Analysis
+
+##### AWS API Analysis
+- **Cluster Status:** [Available/Modifying/Failed]
+- **Configuration:** [Key config details]
+- **Resource Utilization:** [Current usage metrics]
+
+##### Performance Insights Results
+- **Metrics Status:** [Enabled/Disabled/Error]
+- **Top Wait Events:** [If available]
+- **SQL Performance:** [If available]
+
+##### PostgreSQL Diagnostics (via RDS Data API)
+- **Problematic Query:** [Identify resource-intensive queries]
+- **Query Cost:** [Execution cost analysis]
+- **Active PIDs:** [Running process IDs]
+- **Connection Count:** [Active connections]
+
+##### CloudWatch Analysis
+- **ACU Utilization:** [Current and peak usage]
+- **CPU Metrics:** [CPU utilization patterns]
+- **Log Insights:** [Relevant log findings]
+
+#### Recommendations
+[Specific actionable recommendations]
+
+For remediation, ALWAYS use this EXACT format:
+
+### Incident Remediation Summary
+
+#### Actions Completed
+- ✅ [Action 1 with specific details]
+- ✅ [Action 2 with specific details]
+- ✅ [Action 3 with specific details]
+
+#### Incident Details
+- **Incident ID:** [ID from system]
+- **Status:** [RESOLVED/IN_PROGRESS/FAILED]
+- **Completion Time:** [Timestamp]
+
+#### Relevant Details
+- **Cluster Name:** [Target cluster]
+- **Changes Made:** [Specific modifications]
+- **Verification Status:** [Post-remediation checks]
 
 **Capabilities:**
 • IDR Server: Incident management (list, details, status updates)
 • Main KB: Runbook retrieval from knowledge base (ID: {MAIN_KB_ID})
 • AWS API: Resource modifications and verification
+• PostgreSQL: Database diagnostics and performance analysis
+• Performance Insights: RDS metrics and query analysis
+• CloudWatch: Log analysis and infrastructure metrics
 
 **CRITICAL Rules:**
 - Follow runbook procedures exactly when available
 - ALWAYS include --region {AWS_REGION} in AWS commands
+- For comprehensive analysis: Use ALL available tools (PostgreSQL diagnostics, Performance Insights, CloudWatch logs, runbooks)
+- For IDR incidents: Use BOTH local MCP servers AND AWS API for complete analysis:
+  * Use postgres_query_provider for database diagnostic workflows
+  * Use pi_mcp_server for Performance Insights metrics (configure for target instance)
+  * Use PostgreSQL MCP with RDS Data API for direct database queries on target instance
+  * Use CloudWatch MCP for metrics and logs from target cluster
+  * Use AWS API for cluster configuration and log group discovery
+- For runbook requests: Provide detailed multi-tool analysis AND runbook steps but DO NOT execute remediation
+- For chat remediation requests: Ask user "Should I proceed with remediation based on this analysis?" before taking action
+- For direct remediation requests: Execute remediation steps immediately to resolve the incident
 - Verify all changes before updating incident status
-- Provide step-by-step remediation guidance
+- Combine data from multiple sources for comprehensive insights
+
+**IDR Dynamic Instance Targeting:**
+1. Extract cluster/instance name from incidentIdentifier (e.g., "dat301-ws-idr-acu")
+2. Use AWS API MCP to get cluster ARN, secret ARN, and database details for target cluster
+3. Use AWS API MCP with RDS Data API to execute database queries on target cluster:
+   - aws rds-data execute-statement --resource-arn <cluster-arn> --secret-arn <secret-arn> --sql "SELECT * FROM pg_stat_statements"
+4. Use pi_mcp_server with cluster_identifier parameter for Performance Insights metrics
+5. Use CloudWatch MCP for cluster-specific metrics and log groups (get correct log group from AWS API)
+6. Use PostgreSQL MCP ONLY for runbook queries from main database
+7. Combine all data sources for comprehensive incident analysis
+
+**Key Instructions for IDR Tools:**
+- AWS API MCP: Get cluster config, execute RDS Data API queries on target cluster, discover log groups
+- pi_mcp_server: MUST call get_performance_insights_metrics(), get_top_sql_statements(), get_wait_events() with cluster_identifier parameter
+- CloudWatch MCP: Use describe_log_groups and execute_log_insights_query with discovered log groups
+- Main KB: Retrieve and display runbook content prominently at the start
+- DO NOT USE: PostgreSQL MCP server or postgres_query_provider (wrong database/not needed for IDR runbook)
 
 DATABASE: {DATABASE_NAME}, REGION: {AWS_REGION}
 DYNAMODB_TABLE: {DYNAMODB_TABLE}
@@ -383,8 +508,8 @@ def create_unified_mahavat_agent():
 
 **INTELLIGENT ROUTING:**
 - Route to IDR specialist for: incidents, alarms, remediation, runbooks
-- Route to PostgreSQL specialist for: database diagnostics, performance, vacuum, locks
-- Use both specialists for: complex database incidents requiring analysis + remediation
+- Route to PostgreSQL specialist for: database diagnostics, performance, vacuum, locks (NOT for IDR incidents)
+- For IDR incidents: Use IDR specialist ONLY, do not combine with PostgreSQL specialist
 
 **CONTEXT SHARING:**
 - Maintain full conversation context across specialists
@@ -530,7 +655,73 @@ def show_pending_incidents():
             with col4.status("Mahavat Agent retrieving runbook..."):
                 col4.markdown(f"***Runbook Instructions for {selected_incident['incident_id']}***")
                 
-                prompt = f"""Get the remediation runbook for {selected_incident['incidentType']} incident from Main Knowledge Base (ID: {MAIN_KB_ID})."""
+                prompt = f"""Perform comprehensive IDR analysis for {selected_incident['incidentType']} incident on {selected_incident['incidentIdentifier']} in region {AWS_REGION}:
+
+**MANDATORY: Use this EXACT formatting structure:**
+
+### Comprehensive Analysis
+
+#### Executive Summary
+- **Root Cause:** [Primary cause]
+- **Impact:** [Service impact]
+- **Current Constraint:** [Limiting factors]
+- **Health Status:** [Critical/Degraded/Warning]
+
+#### Key Findings from Multi-Tool Analysis
+
+##### AWS API Analysis
+- **Cluster Status:** [Status from describe-db-clusters]
+- **Configuration:** [ACU limits, engine version]
+- **Resource Utilization:** [Current metrics]
+
+##### Performance Insights Results
+- **Metrics Status:** [PI enabled/disabled]
+- **Top Wait Events:** [If available]
+- **SQL Performance:** [If available]
+
+##### PostgreSQL Diagnostics (via RDS Data API)
+- **Problematic Query:** [From pg_stat_statements]
+- **Query Cost:** [Analysis of expensive queries]
+- **Active PIDs:** [From pg_stat_activity]
+- **Connection Count:** [Active sessions]
+
+##### CloudWatch Analysis
+- **ACU Utilization:** [Peak usage and trends]
+- **CPU Metrics:** [CPU patterns]
+- **Log Insights:** [Relevant findings]
+
+#### Recommendations
+[Specific remediation steps]
+
+**EXECUTE THESE SPECIFIC TOOL CALLS IN ORDER:**
+
+1. **Runbook Retrieval** (FIRST - Display prominently):
+   - QueryKnowledgeBases: Get detailed runbook for ACU remediation from Main KB (ID: {MAIN_KB_ID})
+   - Format runbook content with clear headers and steps for UI display
+   - Show runbook content at the top of the analysis
+
+2. **AWS API MCP** - Get cluster configuration and execute database queries:
+   - call_aws: describe-db-clusters for {selected_incident['incidentIdentifier']}
+   - call_aws: list-secrets to find secret ARN for target cluster
+   - call_aws: rds-data execute-statement with pg_stat_statements query on target cluster
+   - call_aws: rds-data execute-statement with pg_stat_activity query on target cluster
+   - call_aws: rds-data execute-statement with pg_locks query on target cluster
+
+3. **Performance Insights** - Call pi_mcp_server tools:
+   - get_performance_insights_metrics(cluster_identifier="{selected_incident['incidentIdentifier']}")
+   - get_top_sql_statements(cluster_identifier="{selected_incident['incidentIdentifier']}")
+   - get_wait_events(cluster_identifier="{selected_incident['incidentIdentifier']}")
+
+4. **CloudWatch Analysis**:
+   - call_aws: cloudwatch get-metric-statistics for ACU utilization on target cluster
+   - describe_log_groups for {selected_incident['incidentIdentifier']}
+   - execute_log_insights_query on correct log group
+
+**DO NOT USE:**
+- PostgreSQL MCP server (connects to wrong database)
+- postgres_query_provider workflows (not needed for IDR runbook analysis)
+
+**IMPORTANT:** Start with runbook display, then provide comprehensive analysis using AWS API + RDS Data API + Performance Insights + CloudWatch. Do NOT execute remediation actions."""
                 
                 response = st.session_state.unified_mahavat_agent(prompt)
                 col4.markdown(str(response))
@@ -543,7 +734,35 @@ def show_pending_incidents():
             with col4.status("Mahavat Agent remediating incident..."):
                 col4.markdown(f"***Auto-remediation for {selected_incident['incident_id']}***")
                 
-                prompt = f"""Remediate this {selected_incident['incidentType']} incident on {selected_incident['incidentIdentifier']} in region {AWS_REGION}. Use both PostgreSQL diagnostics and IDR remediation as needed."""
+                prompt = f"""Remediate this {selected_incident['incidentType']} incident on {selected_incident['incidentIdentifier']} in region {AWS_REGION}. 
+
+**MANDATORY: Use this EXACT formatting structure for remediation summary:**
+
+### Incident Remediation Summary
+
+#### Actions Completed
+- ✅ [Action 1 with specific details and results]
+- ✅ [Action 2 with specific details and results]
+- ✅ [Action 3 with specific details and results]
+
+#### Incident Details
+- **Incident ID:** {selected_incident['incident_id']}
+- **Status:** [RESOLVED/IN_PROGRESS/FAILED]
+- **Completion Time:** [Timestamp]
+
+#### Relevant Details
+- **Cluster Name:** {selected_incident['incidentIdentifier']}
+- **Changes Made:** [Specific modifications]
+- **Verification Status:** [Post-remediation checks]
+
+**IDR Remediation Only:**
+- Use IDR incident specialist for remediation
+- Execute the remediation steps to resolve the incident
+- Update incident status when complete
+- DO NOT call PostgreSQL diagnostic specialist after remediation
+- DO NOT provide additional technical analysis after remediation is complete
+
+**Focus:** Complete the remediation and stop. This is an IDR incident, not a PostgreSQL diagnostic request."""
                 
                 response = st.session_state.unified_mahavat_agent(prompt)
                 col4.markdown(str(response))
