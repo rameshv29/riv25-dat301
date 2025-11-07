@@ -428,7 +428,7 @@ For remediation, ALWAYS use this EXACT format:
 - For comprehensive analysis: Use ALL available tools (PostgreSQL diagnostics, Performance Insights, CloudWatch logs, runbooks)
 - For IDR incidents: Use BOTH local MCP servers AND AWS API for complete analysis:
   * Use postgres_query_provider for database diagnostic workflows
-  * Use pi_mcp_server for Performance Insights metrics (configure for target instance)
+  * Use performance_insights for Performance Insights metrics (configure for target instance)
   * Use PostgreSQL MCP with RDS Data API for direct database queries on target instance
   * Use CloudWatch MCP for metrics and logs from target cluster
   * Use AWS API for cluster configuration and log group discovery
@@ -443,14 +443,14 @@ For remediation, ALWAYS use this EXACT format:
 2. Use AWS API MCP to get cluster ARN, secret ARN, and database details for target cluster
 3. Use AWS API MCP with RDS Data API to execute database queries on target cluster:
    - aws rds-data execute-statement --resource-arn <cluster-arn> --secret-arn <secret-arn> --sql "SELECT * FROM pg_stat_statements"
-4. Use pi_mcp_server with cluster_identifier parameter for Performance Insights metrics
+4. Use performance_insights with cluster_identifier parameter for Performance Insights metrics
 5. Use CloudWatch MCP for cluster-specific metrics and log groups (get correct log group from AWS API)
 6. Use PostgreSQL MCP ONLY for runbook queries from main database
 7. Combine all data sources for comprehensive incident analysis
 
 **Key Instructions for IDR Tools:**
 - AWS API MCP: Get cluster config, execute RDS Data API queries on target cluster, discover log groups
-- pi_mcp_server: MUST call get_performance_insights_metrics(), get_top_sql_statements(), get_wait_events() with cluster_identifier parameter
+- performance_insights: MUST call get_performance_insights_metrics(), get_top_sql_statements(), get_wait_events() with cluster_identifier parameter
 - CloudWatch MCP: Use describe_log_groups and execute_log_insights_query with discovered log groups
 - Main KB: Retrieve and display runbook content prominently at the start
 - DO NOT USE: PostgreSQL MCP server or postgres_query_provider (wrong database/not needed for IDR runbook)

@@ -450,18 +450,19 @@ class PostgreSQLRunbooks:
                         wait_event,
                         EXTRACT(EPOCH FROM (now() - query_start))::integer AS duration_seconds,
                         EXTRACT(EPOCH FROM (now() - xact_start))::integer AS xact_duration_seconds,
-                        backend_xmin,
-                        CASE 
-                            WHEN backend_xmin IS NOT NULL THEN age(backend_xmin)
-                            ELSE NULL
-                        END as xmin_age,
                         CASE 
                             WHEN wait_event_type = 'Lock' THEN 'BLOCKED - Waiting for lock'
                             WHEN wait_event_type = 'IO' THEN 'IO BOUND - Disk/network wait'
-                            WHEN backend_xmin IS NOT NULL AND age(backend_xmin) > 1000000 THEN 'VACUUM BLOCKER - Old xmin'
                             WHEN EXTRACT(EPOCH FROM (now() - xact_start)) > 3600 THEN 'LONG TRANSACTION - May block vacuum'
+                            WHEN EXTRACT(EPOCH FROM (now() - xact_start)) > 1800 THEN 'MODERATE TRANSACTION - Monitor for vacuum impact'
                             ELSE 'ACTIVE'
                         END as query_status,
+                        CASE
+                            WHEN EXTRACT(EPOCH FROM (now() - xact_start)) > 3600 THEN 'CRITICAL - Long transaction blocking vacuum'
+                            WHEN EXTRACT(EPOCH FROM (now() - xact_start)) > 1800 THEN 'WARNING - Transaction may impact vacuum'
+                            WHEN wait_event_type = 'Lock' THEN 'BLOCKED - Query waiting for lock'
+                            ELSE 'ACTIVE - Normal operation'
+                        END as vacuum_impact_assessment,
                         LEFT(query, 150) AS query_preview
                     FROM pg_stat_activity 
                     WHERE backend_type = 'client backend' 
@@ -483,29 +484,42 @@ class PostgreSQLRunbooks:
                             usename,
                             application_name,
                             state,
-                            EXTRACT(EPOCH FROM (now() - xact_start))::integer AS xact_duration_seconds,
                             EXTRACT(EPOCH FROM (now() - query_start))::integer AS query_duration_seconds,
-                            backend_xmin,
-                            CASE 
-                                WHEN backend_xmin IS NOT NULL THEN age(backend_xmin)
-                                ELSE NULL
-                            END as xmin_age,
+                            EXTRACT(EPOCH FROM (now() - xact_start))::integer AS xact_duration_seconds,
+                            xact_start,
+                            query_start,
                             LEFT(query, 100) AS query_preview,
                             CASE
-                                WHEN EXTRACT(EPOCH FROM (now() - xact_start)) > 3600 THEN 'CRITICAL - Blocking vacuum >1hr (causes severe bloat)'
+                                WHEN state = 'idle in transaction' THEN 'CRITICAL - Idle in transaction (blocks vacuum immediately)'
+                                WHEN state = 'idle in transaction (aborted)' THEN 'CRITICAL - Aborted transaction (blocks vacuum)'
+                                WHEN EXTRACT(EPOCH FROM (now() - xact_start)) > 3600 THEN 'CRITICAL - Long transaction >1hr (causes severe bloat)'
                                 WHEN EXTRACT(EPOCH FROM (now() - xact_start)) > 1800 THEN 'WARNING - Long transaction >30min (causes bloat)'
-                                WHEN backend_xmin IS NOT NULL AND age(backend_xmin) > 1000000 THEN 'CRITICAL - Very old xmin (prevents vacuum)'
-                                WHEN backend_xmin IS NOT NULL AND age(backend_xmin) > 100000 THEN 'WARNING - Old xmin (may prevent vacuum)'
+                                WHEN EXTRACT(EPOCH FROM (now() - xact_start)) > 900 THEN 'MODERATE - Transaction >15min (monitor for vacuum impact)'
                                 ELSE 'OK'
-                            END as vacuum_impact
+                            END as vacuum_impact,
+                            CASE
+                                WHEN state = 'idle in transaction' THEN 'TERMINATE_IMMEDIATELY'
+                                WHEN state = 'idle in transaction (aborted)' THEN 'TERMINATE_IMMEDIATELY'
+                                WHEN EXTRACT(EPOCH FROM (now() - xact_start)) > 3600 THEN 'CONSIDER_TERMINATING'
+                                ELSE 'MONITOR'
+                            END as recommended_action
                         FROM pg_stat_activity
-                        WHERE state != 'idle'
+                        WHERE (state != 'idle' OR state LIKE '%in transaction%')
                         AND xact_start IS NOT NULL
                         AND backend_type = 'client backend'
                         AND pid != pg_backend_pid()
                     )
                     SELECT 
-                        *,
+                        pid,
+                        datname,
+                        usename,
+                        application_name,
+                        state,
+                        query_duration_seconds,
+                        xact_duration_seconds,
+                        vacuum_impact,
+                        recommended_action,
+                        query_preview,
                         CASE 
                             WHEN vacuum_impact LIKE 'CRITICAL%' THEN 'YES - This transaction is likely causing table bloat and slow queries'
                             WHEN vacuum_impact LIKE 'WARNING%' THEN 'POSSIBLY - This transaction may contribute to performance issues'
@@ -513,7 +527,7 @@ class PostgreSQLRunbooks:
                         END as slow_query_cause
                     FROM potential_vacuum_blockers
                     WHERE vacuum_impact != 'OK'
-                    ORDER BY xact_duration_seconds DESC, xmin_age DESC NULLS LAST;
+                    ORDER BY xact_duration_seconds DESC;
                 """,
                 "DatabaseInstance": DatabaseInstance
             },
@@ -882,31 +896,26 @@ class PostgreSQLRunbooks:
                         slot_type,
                         database,
                         active,
-                        xmin,
-                        catalog_xmin,
                         restart_lsn,
                         confirmed_flush_lsn,
-                        CASE 
-                            WHEN xmin IS NOT NULL THEN age(xmin)
-                            ELSE NULL
-                        END as xmin_age,
-                        CASE 
-                            WHEN catalog_xmin IS NOT NULL THEN age(catalog_xmin)
-                            ELSE NULL
-                        END as catalog_xmin_age,
                         CASE
-                            WHEN NOT active THEN 'INACTIVE - Slot not in use'
-                            WHEN age(xmin) > 1000000 THEN 'CRITICAL - Blocking vacuum (xmin age > 1M)'
-                            WHEN age(catalog_xmin) > 1000000 THEN 'CRITICAL - Blocking vacuum (catalog_xmin age > 1M)'
-                            WHEN age(xmin) > 100000 THEN 'WARNING - High xmin age (> 100K)'
-                            WHEN age(catalog_xmin) > 100000 THEN 'WARNING - High catalog_xmin age (> 100K)'
-                            ELSE 'OK'
-                        END as status
+                            WHEN NOT active THEN 'INACTIVE - Slot not in use, may block vacuum'
+                            WHEN slot_type = 'logical' AND confirmed_flush_lsn IS NULL THEN 'LOGICAL_SLOT_NOT_CONSUMING - May block vacuum'
+                            WHEN slot_type = 'physical' AND restart_lsn IS NULL THEN 'PHYSICAL_SLOT_ISSUE - Check replication status'
+                            ELSE 'ACTIVE - Slot functioning normally'
+                        END as status,
+                        CASE
+                            WHEN NOT active THEN 'CRITICAL - Inactive slot may prevent vacuum from reclaiming space'
+                            WHEN slot_type = 'logical' AND confirmed_flush_lsn IS NULL THEN 'WARNING - Logical slot not consuming changes'
+                            ELSE 'OK - Slot is healthy'
+                        END as vacuum_impact,
+                        CASE
+                            WHEN NOT active THEN 'DROP_UNUSED_SLOT - Confirm slot is not needed before dropping'
+                            WHEN slot_type = 'logical' AND confirmed_flush_lsn IS NULL THEN 'CHECK_LOGICAL_REPLICATION - Verify consumer is running'
+                            ELSE 'MONITOR_SLOT - Continue monitoring'
+                        END as recommended_action
                     FROM pg_replication_slots
-                    ORDER BY GREATEST(
-                        COALESCE(age(xmin), 0), 
-                        COALESCE(age(catalog_xmin), 0)
-                    ) DESC;
+                    ORDER BY active, slot_name;
                 """,
                 "DatabaseInstance": DatabaseInstance
             },
@@ -1077,11 +1086,6 @@ class PostgreSQLRunbooks:
                             EXTRACT(EPOCH FROM (now() - xact_start))::integer AS xact_duration_seconds,
                             EXTRACT(EPOCH FROM (now() - query_start))::integer AS query_duration_seconds,
                             EXTRACT(EPOCH FROM (now() - state_change))::integer AS state_duration_seconds,
-                            backend_xmin,
-                            CASE 
-                                WHEN backend_xmin IS NOT NULL THEN age(backend_xmin)
-                                ELSE NULL
-                            END as xmin_age,
                             xact_start,
                             query_start,
                             state_change,
@@ -1091,15 +1095,12 @@ class PostgreSQLRunbooks:
                                 WHEN state = 'idle in transaction (aborted)' THEN 'CRITICAL - ABORTED TRANSACTION (BLOCKING VACUUM)'
                                 WHEN EXTRACT(EPOCH FROM (now() - xact_start)) > 3600 THEN 'CRITICAL - Long transaction >1hr (BLOCKING VACUUM)'
                                 WHEN EXTRACT(EPOCH FROM (now() - xact_start)) > 1800 THEN 'WARNING - Long transaction >30min (MAY BLOCK VACUUM)'
-                                WHEN backend_xmin IS NOT NULL AND age(backend_xmin) > 1000000 THEN 'CRITICAL - Very old xmin (BLOCKING VACUUM)'
-                                WHEN backend_xmin IS NOT NULL AND age(backend_xmin) > 100000 THEN 'WARNING - Old xmin (MAY BLOCK VACUUM)'
                                 ELSE 'MONITOR'
                             END as vacuum_blocking_severity,
                             CASE 
-                                WHEN state = 'idle in transaction' THEN 'TERMINATE IMMEDIATELY - Use: SELECT pg_terminate_backend(' || pid || ');'
-                                WHEN state = 'idle in transaction (aborted)' THEN 'TERMINATE IMMEDIATELY - Use: SELECT pg_terminate_backend(' || pid || ');'
-                                WHEN EXTRACT(EPOCH FROM (now() - xact_start)) > 3600 THEN 'CONSIDER TERMINATING - Use: SELECT pg_terminate_backend(' || pid || ');'
-                                WHEN backend_xmin IS NOT NULL AND age(backend_xmin) > 1000000 THEN 'TERMINATE IF SAFE - Check with application team first'
+                                WHEN state = 'idle in transaction' THEN 'TERMINATE_IMMEDIATELY'
+                                WHEN state = 'idle in transaction (aborted)' THEN 'TERMINATE_IMMEDIATELY'
+                                WHEN EXTRACT(EPOCH FROM (now() - xact_start)) > 3600 THEN 'CONSIDER_TERMINATING'
                                 ELSE 'Monitor - No immediate action needed'
                             END as recommended_action
                         FROM pg_stat_activity
@@ -1111,8 +1112,6 @@ class PostgreSQLRunbooks:
                             OR state = 'idle in transaction (aborted)'
                             -- Include long-running active transactions
                             OR (state != 'idle' AND xact_start IS NOT NULL AND EXTRACT(EPOCH FROM (now() - xact_start)) > 300)
-                            -- Include transactions with old xmin
-                            OR (backend_xmin IS NOT NULL AND age(backend_xmin) > 50000)
                         )
                         
                         UNION ALL
@@ -1129,8 +1128,6 @@ class PostgreSQLRunbooks:
                             EXTRACT(EPOCH FROM (now() - prepared))::integer AS xact_duration_seconds,
                             NULL as query_duration_seconds,
                             EXTRACT(EPOCH FROM (now() - prepared))::integer AS state_duration_seconds,
-                            NULL as backend_xmin,
-                            NULL as xmin_age,
                             prepared as xact_start,
                             NULL as query_start,
                             prepared as state_change,
@@ -1140,7 +1137,7 @@ class PostgreSQLRunbooks:
                                 WHEN EXTRACT(EPOCH FROM (now() - prepared)) > 1800 THEN 'WARNING - Prepared transaction >30min (MAY BLOCK VACUUM)'
                                 ELSE 'MONITOR'
                             END as vacuum_blocking_severity,
-                            'COMMIT OR ROLLBACK PREPARED - Use: COMMIT PREPARED ''' || gid || '''; or ROLLBACK PREPARED ''' || gid || ''';' as recommended_action
+                            'COMMIT_OR_ROLLBACK_PREPARED - Use: COMMIT PREPARED ''' || gid || '''; or ROLLBACK PREPARED ''' || gid || ''';' as recommended_action
                         FROM pg_prepared_xacts
                     )
                     SELECT 
@@ -1154,7 +1151,6 @@ class PostgreSQLRunbooks:
                         xact_duration_seconds,
                         query_duration_seconds,
                         state_duration_seconds,
-                        xmin_age,
                         vacuum_blocking_severity,
                         recommended_action,
                         query_preview,
@@ -1184,36 +1180,26 @@ class PostgreSQLRunbooks:
                         slot_type,
                         database,
                         active,
-                        xmin,
-                        catalog_xmin,
                         restart_lsn,
                         confirmed_flush_lsn,
-                        CASE 
-                            WHEN xmin IS NOT NULL THEN age(xmin)
-                            ELSE NULL
-                        END as xmin_age,
-                        CASE 
-                            WHEN catalog_xmin IS NOT NULL THEN age(catalog_xmin)
-                            ELSE NULL
-                        END as catalog_xmin_age,
                         CASE
-                            WHEN NOT active THEN 'INACTIVE - Slot not in use, may be blocking vacuum'
-                            WHEN age(xmin) > 1000000 THEN 'CRITICAL - Blocking vacuum (xmin age > 1M transactions)'
-                            WHEN age(catalog_xmin) > 1000000 THEN 'CRITICAL - Blocking vacuum (catalog_xmin age > 1M)'
-                            WHEN age(xmin) > 100000 THEN 'WARNING - High xmin age (> 100K transactions)'
-                            WHEN age(catalog_xmin) > 100000 THEN 'WARNING - High catalog_xmin age (> 100K)'
-                            ELSE 'OK'
+                            WHEN NOT active THEN 'INACTIVE - Slot not in use, may block vacuum'
+                            WHEN slot_type = 'logical' AND confirmed_flush_lsn IS NULL THEN 'LOGICAL_SLOT_NOT_CONSUMING - May block vacuum'
+                            WHEN slot_type = 'physical' AND restart_lsn IS NULL THEN 'PHYSICAL_SLOT_ISSUE - Check replication status'
+                            ELSE 'ACTIVE - Slot functioning normally'
+                        END as status,
+                        CASE
+                            WHEN NOT active THEN 'CRITICAL - Inactive slot may prevent vacuum from reclaiming space'
+                            WHEN slot_type = 'logical' AND confirmed_flush_lsn IS NULL THEN 'WARNING - Logical slot not consuming changes'
+                            ELSE 'OK - Slot is healthy'
                         END as vacuum_impact,
                         CASE
-                            WHEN NOT active OR age(xmin) > 100000 OR age(catalog_xmin) > 100000 
-                            THEN 'YES - This slot may be causing table bloat and slow queries'
-                            ELSE 'NO - Slot is healthy'
-                        END as performance_impact
+                            WHEN NOT active THEN 'DROP_UNUSED_SLOT - Confirm slot is not needed before dropping'
+                            WHEN slot_type = 'logical' AND confirmed_flush_lsn IS NULL THEN 'CHECK_LOGICAL_REPLICATION - Verify consumer is running'
+                            ELSE 'MONITOR_SLOT - Continue monitoring'
+                        END as recommended_action
                     FROM pg_replication_slots
-                    ORDER BY GREATEST(
-                        COALESCE(age(xmin), 0), 
-                        COALESCE(age(catalog_xmin), 0)
-                    ) DESC;
+                    ORDER BY active, slot_name;
                 """,
                 "DatabaseInstance": DatabaseInstance
             },
@@ -2231,28 +2217,30 @@ def detect_all_vacuum_blockers_immediately() -> dict:
             """,
             "prepared_transactions": """
                 -- PREPARED TRANSACTION BLOCKERS
-                SELECT 
-                    'PREPARED TRANSACTION BLOCKER' as blocker_category,
-                    'PREPARED TRANSACTION' as blocker_type,
-                    NULL as pid,
-                    database as datname,
-                    owner as usename,
-                    'prepared_xact' as application_name,
-                    NULL as client_addr,
-                    'prepared' as state,
-                    EXTRACT(EPOCH FROM (now() - prepared))::integer AS xact_duration_seconds,
-                    EXTRACT(EPOCH FROM (now() - prepared))::integer AS state_duration_seconds,
-                    NULL as backend_xmin,
-                    NULL as xmin_age,
-                    CASE
-                        WHEN EXTRACT(EPOCH FROM (now() - prepared)) > 3600 THEN 'CRITICAL - PREPARED >1hr'
-                        WHEN EXTRACT(EPOCH FROM (now() - prepared)) > 1800 THEN 'WARNING - PREPARED >30min'
-                        ELSE 'ACTIVE'
-                    END as severity,
-                    'COMMIT PREPARED ''' || gid || '''; -- OR: ROLLBACK PREPARED ''' || gid || ''';' as termination_command,
-                    'PREPARED TRANSACTION: ' || gid as query_preview
-                FROM pg_prepared_xacts
-                ORDER BY prepared;
+                    SELECT 
+                        'PREPARED TRANSACTION BLOCKER' as blocker_category,
+                        'PREPARED TRANSACTION' as blocker_type,
+                        NULL as pid,
+                        database as datname,
+                        owner as usename,
+                        'prepared_xact' as application_name,
+                        NULL as client_addr,
+                        'prepared' as state,
+                        EXTRACT(EPOCH FROM (now() - prepared))::integer AS xact_duration_seconds,
+                        EXTRACT(EPOCH FROM (now() - prepared))::integer AS state_duration_seconds,
+                        CASE
+                            WHEN EXTRACT(EPOCH FROM (now() - prepared)) > 3600 THEN 'CRITICAL - PREPARED >1hr'
+                            WHEN EXTRACT(EPOCH FROM (now() - prepared)) > 1800 THEN 'WARNING - PREPARED >30min'
+                            ELSE 'ACTIVE'
+                        END as severity,
+                        CASE 
+                            WHEN EXTRACT(EPOCH FROM (now() - prepared)) > 3600 THEN 'COMMIT_OR_ROLLBACK_NEEDED'
+                            ELSE 'MONITOR_PREPARED'
+                        END as recommended_action,
+                        gid as transaction_id,
+                        'PREPARED TRANSACTION: ' || gid as query_preview
+                    FROM pg_prepared_xacts
+                    ORDER BY prepared;
             """,
             "replication_slot_blockers": """
                 -- REPLICATION SLOT BLOCKERS
@@ -2260,8 +2248,7 @@ def detect_all_vacuum_blockers_immediately() -> dict:
                     'REPLICATION SLOT BLOCKER' as blocker_category,
                     CASE 
                         WHEN NOT active THEN 'INACTIVE REPLICATION SLOT'
-                        WHEN age(xmin) > 1000000 THEN 'LAGGING REPLICATION SLOT (XMIN)'
-                        WHEN age(catalog_xmin) > 1000000 THEN 'LAGGING REPLICATION SLOT (CATALOG_XMIN)'
+                        WHEN slot_type = 'logical' AND confirmed_flush_lsn IS NULL THEN 'LOGICAL_SLOT_NOT_CONSUMING'
                         ELSE 'ACTIVE REPLICATION SLOT'
                     END as blocker_type,
                     NULL as pid,
@@ -2272,31 +2259,21 @@ def detect_all_vacuum_blockers_immediately() -> dict:
                     CASE WHEN active THEN 'active' ELSE 'inactive' END as state,
                     NULL as xact_duration_seconds,
                     NULL as state_duration_seconds,
-                    xmin as backend_xmin,
-                    CASE 
-                        WHEN xmin IS NOT NULL THEN age(xmin)
-                        ELSE NULL
-                    END as xmin_age,
                     CASE
                         WHEN NOT active THEN 'CRITICAL - INACTIVE SLOT BLOCKING VACUUM'
-                        WHEN age(xmin) > 1000000 THEN 'CRITICAL - XMIN AGE >1M TRANSACTIONS'
-                        WHEN age(catalog_xmin) > 1000000 THEN 'CRITICAL - CATALOG_XMIN AGE >1M'
-                        WHEN age(xmin) > 100000 THEN 'WARNING - HIGH XMIN AGE'
+                        WHEN slot_type = 'logical' AND confirmed_flush_lsn IS NULL THEN 'WARNING - LOGICAL SLOT NOT CONSUMING'
                         ELSE 'OK'
                     END as severity,
                     CASE 
-                        WHEN NOT active THEN 'SELECT pg_drop_replication_slot(''' || slot_name || '''); -- WARNING: Confirm slot is not needed'
-                        ELSE 'Monitor replication lag - may need to restart replica or increase wal_sender_timeout'
-                    END as termination_command,
+                        WHEN NOT active THEN 'DROP_UNUSED_SLOT'
+                        WHEN slot_type = 'logical' AND confirmed_flush_lsn IS NULL THEN 'CHECK_LOGICAL_REPLICATION'
+                        ELSE 'MONITOR_SLOT'
+                    END as recommended_action,
+                    restart_lsn,
+                    confirmed_flush_lsn,
                     'Slot: ' || slot_name || ', Type: ' || slot_type as query_preview
                 FROM pg_replication_slots
-                WHERE NOT active 
-                   OR age(xmin) > 100000 
-                   OR age(catalog_xmin) > 100000
-                ORDER BY GREATEST(
-                    COALESCE(age(xmin), 0), 
-                    COALESCE(age(catalog_xmin), 0)
-                ) DESC;
+                ORDER BY active, slot_name;
             """
         },
         "interpretation": {
