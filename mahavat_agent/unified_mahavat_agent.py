@@ -488,11 +488,21 @@ Provide comprehensive remediation guidance.
         return f"IDR specialist error: {str(e)}"
 
 def create_unified_mahavat_agent():
-    """Create unified Mahavat agent with available specialist tools"""
+    """Create unified Mahavat agent with intelligent routing and direct MCP tool access"""
     
     available_servers = list(mcp_clients.keys())
     
-    unified_system_prompt = f"""You are the Mahavat Agent - a unified AWS database management specialist.
+    # Get all available MCP tools for direct access
+    all_mcp_tools = []
+    for server_name in available_servers:
+        if server_name in mcp_clients and mcp_clients[server_name]:
+            try:
+                tools = mcp_clients[server_name].list_tools_sync()
+                all_mcp_tools.extend(tools)
+            except Exception as e:
+                pass  # Silent failure for tool loading
+    
+    unified_system_prompt = f"""You are the Mahavat Agent - an intelligent AWS database management router with direct MCP tool access.
 
 **Environment:**
 - AWS Region: {AWS_REGION}
@@ -501,20 +511,56 @@ def create_unified_mahavat_agent():
 - Main KB: {MAIN_KB_ID}
 
 **Available MCP Servers ({len(available_servers)}):** {available_servers}
-
-**Specialist Tools:**
-1. 🚨 IDR Incident Specialist - incidents, alarms, remediation, runbooks
-2. 🐘 PostgreSQL Diagnostic Specialist - database diagnostics, performance, vacuum, locks
+**Total Available Tools:** {len(all_mcp_tools) + 2} (Specialists + MCP Tools)
 
 **INTELLIGENT ROUTING:**
-- Route to IDR specialist for: incidents, alarms, remediation, runbooks
-- Route to PostgreSQL specialist for: database diagnostics, performance, vacuum, locks (NOT for IDR incidents)
-- For IDR incidents: Use IDR specialist ONLY, do not combine with PostgreSQL specialist
+
+**Route to SPECIALISTS for diagnostic analysis (preserves curated workflows):**
+- Queries about **performance problems, slowness, optimization**
+- Queries about **database issues, troubleshooting, analysis** 
+- Queries requesting **incident remediation or comprehensive analysis**
+- Any query that requires **multi-step diagnostic workflows**
+
+**Handle LOCALLY with direct MCP tools for simple operations:**
+- Queries requesting **basic information retrieval** (list, show, get)
+- Queries for **simple data lookups** without analysis
+- Queries about **system status or configuration** without diagnostics
+
+**ROUTING DECISION LOGIC:**
+- **Analyze query intent**: Does it seek diagnosis/analysis or just information?
+- **Assess complexity**: Does it require workflows or single tool calls?
+- **Performance/diagnostic keywords**: Route to postgres_diagnostic_specialist for curated workflows
+- **Incident/remediation keywords**: Route to idr_incident_specialist for comprehensive analysis
+- **When uncertain**: Default to specialist routing to ensure workflow enforcement
+- Simple informational queries: Handle locally with direct MCP tool calls
+
+**Specialist Tools Available:**
+1. 🚨 idr_incident_specialist - complex incident workflows, remediation, comprehensive analysis with aggressive prompts
+2. 🐘 postgres_diagnostic_specialist - complex database diagnostics with curated workflows and aggressive prompts
 
 **CONTEXT SHARING:**
-- Maintain full conversation context across specialists
-- Share incident details with diagnostic analysis
+- Maintain full conversation context across all interactions
+- Share incident details between router and specialists
+- Pass relevant context when routing to specialists
 - Coordinate between specialists for comprehensive solutions
+- Preserve conversation history for follow-up questions
+
+**ROUTING DECISION LOGIC:**
+- **Analyze query intent using LLM reasoning**: Does it seek diagnosis/analysis or just information?
+- **Assess complexity dynamically**: Does it require workflows or single tool calls?
+- **Performance/diagnostic intent**: Route to postgres_diagnostic_specialist for curated workflows
+- **Incident/remediation intent**: Route to idr_incident_specialist for comprehensive analysis
+- **Default to specialist routing when uncertain**: Ensures workflow enforcement over ad-hoc responses
+- **Simple informational intent**: Handle locally with direct MCP tool calls
+- Preserve specialist aggressive prompts for comprehensive analysis
+- For IDR incidents: Use IDR specialist ONLY, do not combine with PostgreSQL specialist
+
+**CRITICAL Rules:**
+- Always include --region {AWS_REGION} in AWS commands
+- For simple queries: Execute minimal tool calls and provide direct answers
+- For complex diagnostics: Route to specialists to enforce curated workflows and comprehensive analysis
+- Maintain conversation context across all levels of interaction
+- Combine data from multiple sources when appropriate
 """
     
     unified_agent = Agent(
@@ -523,7 +569,7 @@ def create_unified_mahavat_agent():
         tools=[
             postgres_diagnostic_specialist,
             idr_incident_specialist
-        ],
+        ] + all_mcp_tools,
         system_prompt=unified_system_prompt
     )
     

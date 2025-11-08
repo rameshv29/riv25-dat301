@@ -723,7 +723,7 @@ class PostgreSQLRunbooks:
                             application_name,
                             state,
                             EXTRACT(EPOCH FROM (now() - state_change))::integer AS idle_duration_seconds,
-                            'SELECT pg_terminate_backend(' || pid || ');' as termination_command,
+                            'TERMINATE_IMMEDIATELY' as recommended_action,
                             'CRITICAL - Idle in transaction blocking vacuum' as severity,
                             LEFT(query, 100) AS query_preview
                         FROM pg_stat_activity
@@ -741,7 +741,10 @@ class PostgreSQLRunbooks:
                             application_name,
                             state,
                             EXTRACT(EPOCH FROM (now() - xact_start))::integer AS idle_duration_seconds,
-                            'SELECT pg_terminate_backend(' || pid || ');' as termination_command,
+                            CASE 
+                                WHEN EXTRACT(EPOCH FROM (now() - xact_start)) > 3600 THEN 'TERMINATE_RECOMMENDED'
+                                ELSE 'MONITOR_CLOSELY'
+                            END as recommended_action,
                             CASE 
                                 WHEN EXTRACT(EPOCH FROM (now() - xact_start)) > 3600 THEN 'CRITICAL - Long transaction >1hr'
                                 ELSE 'WARNING - Long transaction >5min'
@@ -763,7 +766,7 @@ class PostgreSQLRunbooks:
                         state,
                         idle_duration_seconds,
                         severity,
-                        termination_command,
+                        recommended_action,
                         query_preview,
                         CASE 
                             WHEN blocker_type = 'IDLE_IN_TRANSACTION' THEN 'TERMINATE IMMEDIATELY - This is blocking vacuum'
