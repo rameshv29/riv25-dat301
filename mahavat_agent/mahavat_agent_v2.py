@@ -389,6 +389,7 @@ For runbook analysis, ALWAYS use this EXACT format with smaller headers:
 
 ##### CloudWatch Analysis
 - **ACU Utilization:** [Current and peak usage]
+- **IOPS Utilization:** [Current and peak usage]
 - **CPU Metrics:** [CPU utilization patterns]
 - **Log Insights:** [Relevant log findings]
 
@@ -439,7 +440,7 @@ For remediation, ALWAYS use this EXACT format:
 - Combine data from multiple sources for comprehensive insights
 
 **IDR Dynamic Instance Targeting:**
-1. Extract cluster/instance name from incidentIdentifier (e.g., "dat301-ws-idr-acu")
+1. Extract cluster/instance name from incidentIdentifier
 2. Use AWS API MCP to get cluster ARN, secret ARN, and database details for target cluster
 3. Use AWS API MCP with RDS Data API to execute database queries on target cluster:
    - aws rds-data execute-statement --resource-arn <cluster-arn> --secret-arn <secret-arn> --sql "SELECT * FROM pg_stat_statements"
@@ -717,7 +718,7 @@ def show_pending_incidents():
 
 ##### AWS API Analysis
 - **Cluster Status:** [Status from describe-db-clusters]
-- **Configuration:** [ACU limits, engine version]
+- **Configuration:** [ACU limits, IOPS limits, engine version]
 - **Resource Utilization:** [Current metrics]
 
 ##### Performance Insights Results
@@ -733,6 +734,7 @@ def show_pending_incidents():
 
 ##### CloudWatch Analysis
 - **ACU Utilization:** [Peak usage and trends]
+- **IOPS Utilization:** [Peak usage and trends]
 - **CPU Metrics:** [CPU patterns]
 - **Log Insights:** [Relevant findings]
 
@@ -742,7 +744,7 @@ def show_pending_incidents():
 **EXECUTE THESE SPECIFIC TOOL CALLS IN ORDER:**
 
 1. **Runbook Retrieval** (FIRST - Display prominently):
-   - QueryKnowledgeBases: Get detailed runbook for ACU remediation from Main KB (ID: {MAIN_KB_ID})
+   - QueryKnowledgeBases: Get detailed runbook for the incident remediation from Main KB (ID: {MAIN_KB_ID})
    - Format runbook content with clear headers and steps for UI display
    - Show runbook content at the top of the analysis
 
@@ -760,6 +762,7 @@ def show_pending_incidents():
 
 4. **CloudWatch Analysis**:
    - call_aws: cloudwatch get-metric-statistics for ACU utilization on target cluster
+   - call_aws: cloudwatch get-metric-statistics for IOPS utilization on target cluster
    - describe_log_groups for {selected_incident['incidentIdentifier']}
    - execute_log_insights_query on correct log group
 
