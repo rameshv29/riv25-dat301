@@ -60,17 +60,7 @@ else
 fi
 
 echo ""
-echo "4. Q CLI Installation"
-echo "---------------------"
-if command -v q &> /dev/null; then
-    Q_VERSION=$(q --version 2>&1 | head -1)
-    check_pass "Q CLI installed: $Q_VERSION"
-else
-    check_fail "Q CLI not installed"
-fi
-
-echo ""
-echo "5. UV Installation"
+echo "4. UV Installation"
 echo "------------------"
 if sudo -u ec2-user bash -c '[ -f "$HOME/.local/bin/uv" ]'; then
     UV_VERSION=$(sudo -u ec2-user bash -c '$HOME/.local/bin/uv --version 2>&1')
@@ -86,7 +76,7 @@ else
 fi
 
 echo ""
-echo "6. PostgreSQL Installation"
+echo "5. PostgreSQL Installation"
 echo "--------------------------"
 if command -v psql &> /dev/null; then
     PG_VERSION=$(psql --version)
@@ -95,14 +85,14 @@ else
     check_fail "PostgreSQL not installed"
 fi
 
-if [ -f /usr/pgsql-16/bin/pg_config ]; then
-    check_pass "PostgreSQL 16 development files installed"
+if rpm -q postgresql17-server-devel &> /dev/null && rpm -q libpq-devel &> /dev/null; then
+    check_pass "PostgreSQL development tools installed"
 else
-    check_warn "PostgreSQL 16 development files may be missing"
+    check_warn "PostgreSQL development tools not fully installed"
 fi
 
 echo ""
-echo "7. Code Server Installation"
+echo "6. Code Server Installation"
 echo "---------------------------"
 if [ -f /usr/bin/code-server ]; then
     CODE_VERSION=$(code-server --version 2>&1 | head -1)
@@ -124,7 +114,7 @@ else
 fi
 
 echo ""
-echo "8. Workshop Directory"
+echo "7. Workshop Directory"
 echo "---------------------"
 if [ -d /workshop ]; then
     check_pass "Workshop directory exists"
@@ -150,7 +140,7 @@ else
 fi
 
 echo ""
-echo "9. AWS CLI"
+echo "8. AWS CLI"
 echo "----------"
 if command -v aws &> /dev/null; then
     AWS_VERSION=$(aws --version 2>&1)
@@ -160,7 +150,7 @@ else
 fi
 
 echo ""
-echo "10. Node.js"
+echo "9. Node.js"
 echo "-----------"
 if command -v node &> /dev/null; then
     NODE_VERSION=$(node --version)
@@ -170,7 +160,7 @@ else
 fi
 
 echo ""
-echo "11. Git"
+echo "10. Git"
 echo "-------"
 if command -v git &> /dev/null; then
     GIT_VERSION=$(git --version)
@@ -180,7 +170,7 @@ else
 fi
 
 echo ""
-echo "12. Environment Variables"
+echo "11. Environment Variables"
 echo "-------------------------"
 if [ -f /workshop/.env ]; then
     check_pass ".env file exists"
@@ -195,6 +185,170 @@ else
 fi
 
 echo ""
+echo "12. Workshop Stack Configuration"
+echo "---------------------------------"
+if [ -n "$WORKSHOP_STACK_NAME" ]; then
+    check_pass "WORKSHOP_STACK_NAME set: $WORKSHOP_STACK_NAME"
+else
+    check_warn "WORKSHOP_STACK_NAME not set"
+fi
+
+echo ""
+echo "13. Database Environment Variables"
+echo "-----------------------------------"
+# Check main database variables
+if [ -n "$RDS_CLUSTER_ARN" ]; then
+    check_pass "RDS_CLUSTER_ARN configured"
+else
+    check_warn "RDS_CLUSTER_ARN not set"
+fi
+
+if [ -n "$RDS_SECRET_ARN" ] || [ -n "$MAIN_SECRET_ARN" ]; then
+    check_pass "Main database secret ARN configured"
+else
+    check_warn "Main database secret ARN not set"
+fi
+
+if [ -n "$PGHOST" ]; then
+    check_pass "PostgreSQL connection variables set (PGHOST: $PGHOST)"
+else
+    check_warn "PostgreSQL connection variables not set"
+fi
+
+echo ""
+echo "14. IDR Database Configuration"
+echo "-------------------------------"
+if [ -n "$IDR_CLUSTER_ARN" ]; then
+    check_pass "IDR_CLUSTER_ARN configured"
+else
+    check_warn "IDR_CLUSTER_ARN not set (may not be deployed)"
+fi
+
+if [ -n "$IDR_SECRET_ARN" ]; then
+    check_pass "IDR ACU secret ARN configured"
+else
+    check_warn "IDR ACU secret ARN not set (may not be deployed)"
+fi
+
+if [ -n "$IOPS_SECRET_ARN" ]; then
+    check_pass "IDR IOPS secret ARN configured"
+else
+    check_warn "IDR IOPS secret ARN not set (may not be deployed)"
+fi
+
+echo ""
+echo "15. Knowledge Base Configuration"
+echo "---------------------------------"
+if [ -n "$MAIN_KB_ID" ]; then
+    check_pass "Main Knowledge Base ID configured: $MAIN_KB_ID"
+else
+    check_warn "Main Knowledge Base ID not set"
+fi
+
+if [ -n "$IDR_KB_ID" ]; then
+    check_pass "IDR Knowledge Base ID configured: $IDR_KB_ID"
+else
+    check_warn "IDR Knowledge Base ID not set (may not be deployed)"
+fi
+
+echo ""
+echo "16. DynamoDB Configuration"
+echo "--------------------------"
+if [ -n "$DYNAMODB_TABLE" ] || [ -n "$INCIDENT_TABLE" ]; then
+    check_pass "DynamoDB incident table configured"
+else
+    check_warn "DynamoDB incident table not set (may not be deployed)"
+fi
+
+echo ""
+echo "17. Cognito Configuration"
+echo "-------------------------"
+if [ -n "$COGNITO_USER_POOL_ID" ]; then
+    check_pass "Cognito User Pool ID configured"
+else
+    check_warn "Cognito User Pool ID not set"
+fi
+
+if [ -n "$COGNITO_CLIENT_ID" ]; then
+    check_pass "Cognito Client ID configured"
+else
+    check_warn "Cognito Client ID not set"
+fi
+
+echo ""
+echo "18. PostgreSQL Connection Functions"
+echo "------------------------------------"
+if grep -q "function psql_main()" /home/ec2-user/.bashrc 2>/dev/null; then
+    check_pass "psql_main function defined in .bashrc"
+else
+    check_warn "psql_main function not defined in .bashrc"
+fi
+
+if grep -q "function psql_idr_acu()" /home/ec2-user/.bashrc 2>/dev/null; then
+    check_pass "psql_idr_acu function defined in .bashrc"
+else
+    check_warn "psql_idr_acu function not defined (may not be deployed)"
+fi
+
+if grep -q "function psql_idr_iops()" /home/ec2-user/.bashrc 2>/dev/null; then
+    check_pass "psql_idr_iops function defined in .bashrc"
+else
+    check_warn "psql_idr_iops function not defined (may not be deployed)"
+fi
+
+echo ""
+echo "19. Load Testing Aliases"
+echo "------------------------"
+if grep -q "alias iops-test=" /home/ec2-user/.bashrc 2>/dev/null; then
+    check_pass "iops-test alias defined in .bashrc"
+else
+    check_warn "iops-test alias not defined"
+fi
+
+if grep -q "alias acu-test=" /home/ec2-user/.bashrc 2>/dev/null; then
+    check_pass "acu-test alias defined in .bashrc"
+else
+    check_warn "acu-test alias not defined"
+fi
+
+if grep -q "alias main-test=" /home/ec2-user/.bashrc 2>/dev/null; then
+    check_pass "main-test alias defined in .bashrc"
+else
+    check_warn "main-test alias not defined"
+fi
+
+echo ""
+echo "20. Mahavat Agent Setup"
+echo "-----------------------"
+if [ -d /workshop/mahavat_agent ]; then
+    check_pass "Mahavat agent directory exists"
+    
+    if [ -d /workshop/mahavat_agent/venv ]; then
+        check_pass "Mahavat agent virtual environment exists"
+        
+        # Check if strands packages are installed
+        if /workshop/mahavat_agent/venv/bin/pip list 2>/dev/null | grep -q "strands-agents"; then
+            check_pass "Strands agents package installed"
+        else
+            check_warn "Strands agents package not installed"
+        fi
+    else
+        check_warn "Mahavat agent virtual environment not created"
+    fi
+else
+    check_warn "Mahavat agent directory not found"
+fi
+
+echo ""
+echo "21. Load Testing Scripts"
+echo "------------------------"
+if [ -f /workshop/load-test/run_stress_test.sh ]; then
+    check_pass "Load testing scripts available"
+else
+    check_warn "Load testing scripts not found"
+fi
+
+echo ""
 echo "============================================"
 echo "Validation Summary"
 echo "============================================"
@@ -203,6 +357,8 @@ echo -e "Warnings: ${YELLOW}$WARNINGS${NC}"
 
 if [ $ERRORS -eq 0 ]; then
     echo -e "${GREEN}✅ Environment validation passed!${NC}"
+    echo ""
+    echo "To view all workshop environment variables, run: workshop-env"
     exit 0
 else
     echo -e "${RED}❌ Environment validation failed with $ERRORS error(s)${NC}"

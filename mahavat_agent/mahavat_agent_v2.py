@@ -842,7 +842,8 @@ def show_all_incidents():
             'incident_time': item.get('incident_time', ''),
             'alarm_name': item.get('alarm_name', ''),
             'created_at': item.get('created_at', ''),
-            'resolution': item.get('resolution_notes', '')
+            'runbook_used': item.get('resolution', ''),
+            'remediation_steps': ', '.join(item.get('remediation_steps', []))
         })
     
     df = pd.DataFrame(incidents_data)

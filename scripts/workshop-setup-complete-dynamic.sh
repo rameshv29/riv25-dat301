@@ -39,6 +39,7 @@ MAIN_KB_ID=$(get_stack_output "KnowledgeBaseId")
 IDR_KB_ID=$(get_stack_output "IDRKnowledgeBaseId")
 DYNAMODB_TABLE=$(get_stack_output "IDRIncidentTable")
 IDR_CLUSTER_ARN=$(get_stack_output "IDRClusterArn")
+RDS_CLUSTER_ARN=$(get_stack_output "MainDBClusterArn")
 COGNITO_USER_POOL_ID=$(get_stack_output "CognitoUserPoolId")
 COGNITO_CLIENT_ID=$(get_stack_output "CognitoClientId")
 
@@ -136,6 +137,7 @@ export WORKSHOP_STACK_NAME=$STACK_NAME
 
 # Main Database (Production)
 export RDS_SECRET_ARN=$MAIN_SECRET_ARN
+export RDS_CLUSTER_ARN=$RDS_CLUSTER_ARN
 export DATABASE_NAME=$MAIN_DB
 export DB_SECRET_ARN=$MAIN_SECRET_ARN
 export DB_ENDPOINT=$MAIN_HOST

@@ -19,11 +19,8 @@ dnf install -y \
     libuuid-devel \
     expat-devel
 
-# Install PostgreSQL 16
-dnf install -y postgresql16-server postgresql16 postgresql16-devel postgresql16-contrib
-
-# Add pg_config to PATH for ec2-user only (not system-wide)
-echo 'export PATH="/usr/pgsql-16/bin:$PATH"' >> /home/ec2-user/.bashrc
+# Install PostgreSQL 17
+dnf install -y postgresql17-server postgresql17 postgresql17-server-devel postgresql17-contrib libpq-devel
 
 # Create workshop directory first
 mkdir -p /workshop

@@ -138,7 +138,7 @@ def create_idr_agent():
 
 1. **Get Runbook**: Use retrieve tool to get remediation runbook from knowledge base
    - Query: "[incident_type] remediation runbook"
-   - Extract the exact runbook text
+   - Extract the exact runbook name/title and steps
 
 2. **Follow Runbook Steps EXACTLY**: The runbook contains specific instructions:
    - Conditions to check (e.g., "IF usage > 80%")
@@ -151,7 +151,10 @@ def create_idr_agent():
    - Apply changes
    - Verify results
 
-4. **Update Status**: Use update_incident_status ONLY after verification succeeds
+4. **Update Status**: Use update_incident_status with:
+   - incident_id: The incident ID
+   - runbook_name: The exact name/title of the runbook used (e.g., "IOPS Remediation Runbook")
+   - remediation_steps: Array of strings, each describing a step taken (e.g., ["Retrieved current IOPS: 3000", "Calculated new IOPS: 3600 (20% increase)", "Applied modification with modify-db-instance", "Verified change applied successfully"])
 
 **CRITICAL Rules:**
 - ALWAYS use your tools - never simulate or assume
@@ -160,6 +163,7 @@ def create_idr_agent():
 - Calculate based on current state and runbook instructions
 - Verify changes before updating incident status
 - Provide clear step-by-step output showing what you did
+- When calling update_incident_status, provide the runbook name and detailed steps array
 - If a resource is not found, STOP and report the error - don't guess or simulate
 
 **Example for IOPS incident:**
@@ -168,7 +172,7 @@ def create_idr_agent():
 3. Calculate new IOPS per runbook (e.g., current * 1.2)
 4. call_aws: aws rds modify-db-instance --db-instance-identifier <id> --iops <new> --region {AWS_REGION} --apply-immediately
 5. call_aws: verify change was applied
-6. update_incident_status with details
+6. update_incident_status(incident_id="...", runbook_name="IOPS Remediation Runbook", remediation_steps=["Step 1: ...", "Step 2: ...", ...])
 
 Always show your work: what you found, what you calculated, what you executed."""
     )
@@ -412,13 +416,14 @@ def show_all_incidents():
     for item in incidents:
         incidents_data.append({
             'incident_id': item.get('incident_id', ''),
-            'incidentIdentifier': item.get('incidentIdentifier', ''),
-            'incidentType': item.get('incidentType', ''),
+            'incidentIdentifier': item.get('incidentIdentifier', item.get('incident_identifier', '')),
+            'incidentType': item.get('incidentType', item.get('incident_type', '')),
             'incident_status': item.get('incident_status', ''),
             'incident_time': item.get('incident_time', ''),
             'alarm_name': item.get('alarm_name', ''),
             'created_at': item.get('created_at', ''),
-            'resolution': item.get('resolution_notes', '')
+            'runbook_used': item.get('resolution', ''),
+            'remediation_steps': ', '.join(item.get('remediation_steps', []))
         })
     
     df = pd.DataFrame(incidents_data)
@@ -436,9 +441,10 @@ def show_all_incidents():
             "incident_time": "Incident Time",
             "alarm_name": "Alarm Name",
             "created_at": "Created At",
-            "resolution": "Resolution"
+            "runbook_used": "Runbook Used",
+            "remediation_steps": "Remediation Steps"
         },
-        column_order=("incident_id", "incidentIdentifier", "incidentType", "incident_status", "incident_time", "resolution")
+        column_order=("incident_id", "incidentIdentifier", "incidentType", "incident_status", "incident_time", "runbook_used", "remediation_steps")
     )
     
     st.caption(f"Total incidents: {len(df)}")
