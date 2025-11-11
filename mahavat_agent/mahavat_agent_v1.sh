@@ -33,10 +33,25 @@ echo "   Region: $AWS_REGION"
 echo "   Database: $IDR_DATABASE_NAME"
 echo "   DynamoDB: $DYNAMODB_TABLE"
 
+# Create logs directory
+mkdir -p logs
+
 # Activate virtual environment
 source /workshop/mahavat_agent/venv/bin/activate
 
-# Start IDR agent
-streamlit run mahavat_agent_v1.py --server.port 8502 --server.address 0.0.0.0
+echo "📝 Logs will be written to:"
+echo "   Info:  logs/mahavat_v1_info.log"
+echo "   Error: logs/mahavat_v1_error.log"
+echo ""
+echo "💡 To monitor logs in real-time, run:"
+echo "   tail -f logs/mahavat_v1_info.log"
+echo ""
+
+# Start IDR agent with separate logs
+streamlit run mahavat_agent_v1.py \
+    --server.port 8502 \
+    --server.address 0.0.0.0 \
+    > >(tee -a logs/mahavat_v1_info.log) \
+    2> >(tee -a logs/mahavat_v1_error.log >&2)
 
 echo "✅ IDR Agent ready! Access at http://localhost:8502"

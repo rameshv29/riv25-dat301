@@ -893,7 +893,7 @@ def main():
     
     # Sidebar
     with st.sidebar:
-        st.image("https://d1.awsstatic.com/logos/aws-logo-lockups/poweredbyaws/PB_AWS_logo_RGB_stacked_REV_SQ.91cd4af40773cbfbd15577a3c2b8a346fe3e8fa2.png", width=120)
+        st.image("Mahavat.png", width=120)
         st.subheader("Mahavat Agent")
         st.caption("Unified Database Management")
         st.caption("IDR + PostgreSQL Diagnostics")
@@ -913,10 +913,7 @@ def main():
         
         # MCP Server Status - shows initialization messages here
         with st.expander("🛠️ MCP Server Status"):
-            available_servers = list(mcp_clients.keys())
-            st.markdown(f"**Active Servers ({len(available_servers)}):**")
-            for server in available_servers:
-                st.markdown(f"✅ {server}")
+            st.markdown("**MCP servers are initialized and ready**")
     
     # Initialize unified agent
     if 'unified_mahavat_agent' not in st.session_state:
@@ -933,7 +930,6 @@ def main():
     if st.session_state.show_chat:
         st.divider()
         st.markdown("### 💬 Mahavat Agent Chat")
-        st.caption(f"🤖 Active servers: {', '.join(list(mcp_clients.keys()))}")
         
         # Context indicator
         if st.session_state.selected_incident_context:
@@ -943,7 +939,8 @@ def main():
         chat_container = st.container(height=300)
         with chat_container:
             for msg in st.session_state.chat_messages:
-                with st.chat_message(msg["role"]):
+                avatar = "Mahavat.png" if msg["role"] == "assistant" else None
+                with st.chat_message(msg["role"], avatar=avatar):
                     st.write(msg["content"])
         
         # Chat input

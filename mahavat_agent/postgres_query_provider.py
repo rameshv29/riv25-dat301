@@ -1457,7 +1457,7 @@ def slow_query_diagnostic(DatabaseInstance: str = "dev-cluster") -> dict:
                 "action": "get_log_events",
                 "purpose": "Search for slow query logs",
                 "parameters": {
-                    "log_group": "/aws/rds/cluster/dev-cluster/postgresql",
+                    "log_group": f"/aws/rds/cluster/{DatabaseInstance}/postgresql",
                     "filter_pattern": "duration.*ms|slow query",
                     "hours_back": 24,
                     "max_items": 100
@@ -1533,7 +1533,7 @@ def lock_analysis_diagnostic(DatabaseInstance: str = "dev-cluster") -> dict:
                 "action": "get_log_events",
                 "purpose": "Search for deadlock and lock timeout logs",
                 "parameters": {
-                    "log_group": "/aws/rds/cluster/dev-cluster/postgresql",
+                    "log_group": f"/aws/rds/cluster/{DatabaseInstance}/postgresql",
                     "filter_pattern": "deadlock|lock timeout|could not obtain lock",
                     "hours_back": 24,
                     "max_items": 100
@@ -1609,7 +1609,7 @@ def vacuum_analysis_diagnostic(DatabaseInstance: str = "dev-cluster") -> dict:
                 "action": "get_log_events",
                 "purpose": "Search for vacuum-related log entries",
                 "parameters": {
-                    "log_group": "/aws/rds/cluster/dev-cluster/postgresql",
+                    "log_group": f"/aws/rds/cluster/{DatabaseInstance}/postgresql",
                     "filter_pattern": "removable cutoff",
                     "hours_back": 24,
                     "max_items": 100
@@ -1620,7 +1620,7 @@ def vacuum_analysis_diagnostic(DatabaseInstance: str = "dev-cluster") -> dict:
                 "action": "get_log_events", 
                 "purpose": "Search for autovacuum launcher activity",
                 "parameters": {
-                    "log_group": "/aws/rds/cluster/dev-cluster/postgresql",
+                    "log_group": f"/aws/rds/cluster/{DatabaseInstance}/postgresql",
                     "filter_pattern": "autovacuum launcher",
                     "hours_back": 24,
                     "max_items": 50
@@ -1709,7 +1709,7 @@ def query_performance_diagnostic(DatabaseInstance: str = "dev-cluster", table_na
                 "action": "get_log_events",
                 "purpose": "Search for slow query logs and performance issues",
                 "parameters": {
-                    "log_group": "/aws/rds/cluster/dev-cluster/postgresql",
+                    "log_group": f"/aws/rds/cluster/{DatabaseInstance}/postgresql",
                     "filter_pattern": "duration.*ms",
                     "start_time": "24h"
                 }
@@ -1778,7 +1778,7 @@ def connection_analysis_diagnostic(DatabaseInstance: str = "dev-cluster") -> dic
                 "action": "get_log_events",
                 "purpose": "Search for connection-related log entries",
                 "parameters": {
-                    "log_group": "/aws/rds/cluster/dev-cluster/postgresql",
+                    "log_group": f"/aws/rds/cluster/{DatabaseInstance}/postgresql",
                     "filter_pattern": "connection|authentication|too many connections",
                     "hours_back": 24,
                     "max_items": 100
@@ -1842,28 +1842,28 @@ def get_vacuum_log_analysis_queries() -> List[Dict[str, str]]:
     return [
         {
             "tool": "get_log_events",
-            "log_group": "/aws/rds/cluster/dev-cluster/postgresql", 
+            "log_group": f"/aws/rds/cluster/{DatabaseInstance}/postgresql", 
             "search_pattern": "removable cutoff:",
             "description": "Find vacuum removable cutoff values in logs",
             "time_range_hours": 24
         },
         {
             "tool": "get_log_events", 
-            "log_group": "/aws/rds/cluster/dev-cluster/postgresql",
+            "log_group": f"/aws/rds/cluster/{DatabaseInstance}/postgresql",
             "search_pattern": "automatic vacuum.*sales_data",
             "description": "Find autovacuum runs for sales_data table",
             "time_range_hours": 72
         },
         {
             "tool": "get_log_events",
-            "log_group": "/aws/rds/cluster/dev-cluster/postgresql", 
+            "log_group": f"/aws/rds/cluster/{DatabaseInstance}/postgresql", 
             "search_pattern": "autovacuum launcher",
             "description": "Check autovacuum launcher activity",
             "time_range_hours": 24
         },
         {
             "tool": "get_log_events",
-            "log_group": "/aws/rds/cluster/dev-cluster/postgresql",
+            "log_group": f"/aws/rds/cluster/{DatabaseInstance}/postgresql",
             "search_pattern": "FATAL|ERROR.*vacuum",
             "description": "Find vacuum-related errors",
             "time_range_hours": 168
@@ -1881,21 +1881,21 @@ def get_performance_log_analysis_queries() -> List[Dict[str, str]]:
     return [
         {
             "tool": "get_log_events",
-            "log_group": "/aws/rds/cluster/dev-cluster/postgresql",
+            "log_group": f"/aws/rds/cluster/{DatabaseInstance}/postgresql",
             "search_pattern": "duration.*ms.*SELECT.*sales_data",
             "description": "Find slow queries on sales_data table",
             "time_range_hours": 24
         },
         {
             "tool": "get_log_events",
-            "log_group": "/aws/rds/cluster/dev-cluster/postgresql", 
+            "log_group": f"/aws/rds/cluster/{DatabaseInstance}/postgresql", 
             "search_pattern": "checkpoint",
             "description": "Check checkpoint frequency and duration",
             "time_range_hours": 24
         },
         {
             "tool": "get_log_events",
-            "log_group": "/aws/rds/cluster/dev-cluster/postgresql",
+            "log_group": f"/aws/rds/cluster/{DatabaseInstance}/postgresql",
             "search_pattern": "temporary file.*exceeds",
             "description": "Find queries creating large temporary files",
             "time_range_hours": 48

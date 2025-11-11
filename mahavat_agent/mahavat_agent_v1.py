@@ -474,7 +474,7 @@ def main():
     
     # Sidebar
     with st.sidebar:
-        st.image("https://d1.awsstatic.com/logos/aws-logo-lockups/poweredbyaws/PB_AWS_logo_RGB_stacked_REV_SQ.91cd4af40773cbfbd15577a3c2b8a346fe3e8fa2.png", width=120)
+        st.image("Mahavat.png", width=120)
         st.subheader("IDR: Incident Detection & Remediation")
         st.caption("Powered by Amazon Aurora & Bedrock")
         st.divider()
@@ -515,7 +515,8 @@ def main():
         chat_container = st.container(height=300)
         with chat_container:
             for msg in st.session_state.chat_messages:
-                with st.chat_message(msg["role"]):
+                avatar = "Mahavat.png" if msg["role"] == "assistant" else None
+                with st.chat_message(msg["role"], avatar=avatar):
                     st.write(msg["content"])
         
         # Chat input
