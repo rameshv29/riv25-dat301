@@ -20,7 +20,7 @@ dnf install -y \
     expat-devel
 
 # Install PostgreSQL 17
-dnf install -y postgresql17-server postgresql17 postgresql17-server-devel postgresql17-contrib libpq-devel
+dnf install -y postgresql17-server postgresql17 postgresql17-server-devel postgresql17-contrib
 
 # Create workshop directory first
 mkdir -p /workshop
