@@ -1,8 +1,8 @@
 #!/bin/bash
 
 ################################################################################
-# Mahavat Agent Startup Script (v2)
-# Description: Validates environment and launches the Mahavat Agent Streamlit app
+# IOPS Stress Test Script
+# Description: Runs I/O intensive stress test on IDR provisioned instance
 ################################################################################
 
 set -e  # Exit on error
@@ -12,11 +12,10 @@ set -u  # Exit on undefined variable
 # Configuration
 ################################################################################
 
-readonly SCRIPT_NAME="Mahavat Agent"
-readonly STREAMLIT_PORT=8503
-readonly STREAMLIT_HOST="0.0.0.0"
+readonly SCRIPT_NAME="IOPS Stress Test"
+readonly WORKLOAD_TYPE="IO"
 readonly VENV_PATH="/workshop/mahavat_agent/venv/bin/activate"
-readonly APP_SCRIPT="mahavat_agent_v2.py"
+readonly STRESS_TEST_SCRIPT="/workshop/load-test/stress_test.py"
 
 ################################################################################
 # Color Codes for Output
@@ -76,42 +75,14 @@ validate_all_env_vars() {
     
     local all_valid=true
     
-    # Common variables
-    local common_vars=(
+    # Required variables for IOPS test
+    local required_vars=(
+        "IOPS_SECRET_ARN"
         "AWS_REGION"
-        "DYNAMODB_TABLE"
     )
     
-    # IDR (Intelligent Database Router) variables
-    local idr_vars=(
-        "IDR_CLUSTER_ARN"
-        "IDR_SECRET_ARN"
-        "IDR_DATABASE_NAME"
-    )
-    
-    # RDS variables
-    local rds_vars=(
-        "RDS_CLUSTER_ARN"
-        "RDS_SECRET_ARN"
-        "DATABASE_NAME"
-    )
-    
-    # Validate common variables
-    for var in "${common_vars[@]}"; do
-        if ! validate_env_var "$var"; then
-            all_valid=false
-        fi
-    done
-    
-    # Validate IDR variables
-    for var in "${idr_vars[@]}"; do
-        if ! validate_env_var "$var"; then
-            all_valid=false
-        fi
-    done
-    
-    # Validate RDS variables
-    for var in "${rds_vars[@]}"; do
+    # Validate all required variables
+    for var in "${required_vars[@]}"; do
         if ! validate_env_var "$var"; then
             all_valid=false
         fi
@@ -119,6 +90,7 @@ validate_all_env_vars() {
     
     if [ "$all_valid" = false ]; then
         log_error "Environment validation failed. Please set all required variables."
+        log_info "Run 'source ~/.bashrc' to load environment variables"
         return 1
     fi
     
@@ -127,31 +99,16 @@ validate_all_env_vars() {
 }
 
 display_configuration() {
-    log_section "Current Configuration"
+    log_section "Test Configuration"
     
-    echo -e "${CYAN}AWS Configuration:${NC}"
+    echo -e "${CYAN}Target:${NC}"
+    echo "   Database:            IDR Provisioned Instance"
+    echo "   Secret ARN:          $IOPS_SECRET_ARN"
+    echo ""
+    
+    echo -e "${CYAN}Test Parameters:${NC}"
+    echo "   Workload Type:       $WORKLOAD_TYPE (I/O Intensive)"
     echo "   Region:              $AWS_REGION"
-    echo ""
-    
-    echo -e "${CYAN}IDR Configuration:${NC}"
-    echo "   Cluster ARN:         $IDR_CLUSTER_ARN"
-    echo "   Secret ARN:          $IDR_SECRET_ARN"
-    echo "   Database:            $IDR_DATABASE_NAME"
-    echo ""
-    
-    echo -e "${CYAN}RDS Configuration:${NC}"
-    echo "   Cluster ARN:         $RDS_CLUSTER_ARN"
-    echo "   Secret ARN:          $RDS_SECRET_ARN"
-    echo "   Database:            $DATABASE_NAME"
-    echo ""
-    
-    echo -e "${CYAN}DynamoDB:${NC}"
-    echo "   Table:               $DYNAMODB_TABLE"
-    echo ""
-    
-    echo -e "${CYAN}Application:${NC}"
-    echo "   Port:                $STREAMLIT_PORT"
-    echo "   Host:                $STREAMLIT_HOST"
 }
 
 activate_virtual_environment() {
@@ -167,22 +124,23 @@ activate_virtual_environment() {
     log_success "Virtual environment activated"
 }
 
-start_streamlit_app() {
-    log_section "Starting $SCRIPT_NAME"
+run_stress_test() {
+    log_section "Running $SCRIPT_NAME"
     
-    log_info "Launching Streamlit application..."
-    log_info "Access URL: ${GREEN}http://localhost:$STREAMLIT_PORT${NC}"
+    if [ ! -f "$STRESS_TEST_SCRIPT" ]; then
+        log_error "Stress test script not found at: $STRESS_TEST_SCRIPT"
+        return 1
+    fi
+    
+    log_info "Starting IOPS stress test..."
+    log_warning "This test will generate high I/O load on the database"
     echo ""
     
-    # Start Streamlit with error handling
-    if streamlit run "$APP_SCRIPT" \
-        --server.port "$STREAMLIT_PORT" \
-        --server.address "$STREAMLIT_HOST" \
-        --server.headless true \
-        --browser.gatherUsageStats false; then
-        log_success "$SCRIPT_NAME completed successfully"
+    # Run stress test with error handling
+    if python3 "$STRESS_TEST_SCRIPT" -s "$IOPS_SECRET_ARN" -w "$WORKLOAD_TYPE"; then
+        log_success "IOPS stress test completed successfully"
     else
-        log_error "$SCRIPT_NAME failed to start"
+        log_error "IOPS stress test failed"
         return 1
     fi
 }
@@ -209,8 +167,8 @@ main() {
         exit 1
     fi
     
-    # Start the application
-    if ! start_streamlit_app; then
+    # Run the stress test
+    if ! run_stress_test; then
         exit 1
     fi
 }

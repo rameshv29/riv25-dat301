@@ -18,7 +18,7 @@ import boto3
 # Configuration
 AWS_REGION = os.environ.get('AWS_REGION', 'us-west-2')
 DYNAMODB_TABLE = os.environ.get('DYNAMODB_TABLE', 'dat-ws-v9-incidents')
-IDR_KB_ID = os.environ.get('IDR_KB_ID', '')
+MAIN_KB_ID = os.environ.get('MAIN_KB_ID', '')
 BEDROCK_MODEL_ID = os.environ.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-20250514-v1:0')
 
 def get_kpi(iconname, metricname, metricvalue):
@@ -126,7 +126,7 @@ def create_idr_agent():
 
 **Your Tools:**
 - IDR MCP Server: list_incidents, get_incident_details, update_incident_status
-- Bedrock KB Retrieval: retrieve (knowledge_base_id: {IDR_KB_ID})
+- Bedrock KB Retrieval: retrieve (knowledge_base_id: {MAIN_KB_ID})
 - AWS API Server: call_aws (execute AWS CLI commands)
 
 **CRITICAL: AWS Region**
@@ -322,7 +322,7 @@ def show_pending_incidents():
                 prompt = f"""Get the remediation runbook for {selected_incident['incidentType']} incident.
 
 Use the retrieve tool with:
-- knowledge_base_id: {IDR_KB_ID}
+- knowledge_base_id: {MAIN_KB_ID}
 - query: "{selected_incident['incidentType']} remediation runbook"
 
 Return ONLY the runbook text content, formatted for readability. Replace markdown headers with bold text."""
@@ -360,7 +360,7 @@ Return ONLY the runbook text content, formatted for readability. Replace markdow
 
 **CRITICAL Instructions:**
 
-1. **Get Runbook**: Use retrieve tool to get "{selected_incident['incidentType']} remediation runbook" from KB {IDR_KB_ID}
+1. **Get Runbook**: Use retrieve tool to get "{selected_incident['incidentType']} remediation runbook" from KB {MAIN_KB_ID}
 
 2. **Follow Runbook Steps**: Execute each step in order:
    - Step 1: Check resource status

@@ -18,7 +18,7 @@ import boto3
 # Configuration - Using workshop environment variables
 AWS_REGION = os.environ.get('AWS_REGION', 'us-west-2')
 DYNAMODB_TABLE = os.environ.get('DYNAMODB_TABLE', 'dat301-ws-incidents')
-MAIN_KB_ID = os.environ.get('MAIN_KB_ID', os.environ.get('IDR_KB_ID', ''))
+MAIN_KB_ID = os.environ.get('MAIN_KB_ID', '')
 BEDROCK_MODEL_ID = os.environ.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-20250514-v1:0')
 DATABASE_NAME = os.environ.get('DATABASE_NAME', 'workshop_db')
 RDS_CLUSTER_ARN = os.environ.get('RDS_CLUSTER_ARN', '')

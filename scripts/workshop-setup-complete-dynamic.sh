@@ -182,9 +182,9 @@ export INCIDENT_TABLE=$DYNAMODB_TABLE
 export COGNITO_USER_POOL_ID=$COGNITO_USER_POOL_ID
 export COGNITO_CLIENT_ID=$COGNITO_CLIENT_ID
 
-# Load testing aliases
-alias iops-test='/workshop/load-test/run_stress_test.sh -s \$IOPS_SECRET_ARN -w IO'
-alias acu-test='/workshop/load-test/run_stress_test.sh -s \$IDR_SECRET_ARN -w CPU'
+# Load testing aliases (using beautified scripts)
+alias iops-test='/workshop/load-test/iops-test.sh'
+alias acu-test='/workshop/load-test/acu-test.sh'
 alias main-test='/workshop/load-test/run_stress_test.sh -s \$MAIN_SECRET_ARN -w CPU'
 
 # Auto-activate virtual environment
