@@ -1,6 +1,17 @@
 #!/bin/bash
 echo "🗄️ DAT301 Workshop - Database Setup"
 
+# Get Main DB credentials
+if [ -n "$MAIN_SECRET_ARN" ]; then
+    MAIN_SECRET=$(aws secretsmanager get-secret-value --secret-id "$MAIN_SECRET_ARN" --region $AWS_REGION --query SecretString --output text)
+    MAIN_HOST=$(echo $MAIN_SECRET | jq -r .host)
+    MAIN_PORT=$(echo $MAIN_SECRET | jq -r .port)
+    MAIN_USER=$(echo $MAIN_SECRET | jq -r .username)
+    MAIN_PASS=$(echo $MAIN_SECRET | jq -r .password)
+    MAIN_DB=$(echo $MAIN_SECRET | jq -r .dbname)
+fi
+
+
 # Check if main database connection variables are set
 if [ -z "$MAIN_HOST" ] || [ -z "$MAIN_DB" ] || [ -z "$MAIN_USER" ] || [ -z "$MAIN_PASS" ]; then
     echo "❌ Error: Main database environment variables not set"

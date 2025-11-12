@@ -8,7 +8,7 @@ END
 $$;
 
 -- Grant admin privileges
-GRANT ALL PRIVILEGES ON DATABASE CURRENT_DATABASE TO workshop_admin;
+GRANT ALL PRIVILEGES ON DATABASE workshop_db TO workshop_admin;
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO workshop_admin;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO workshop_admin;
 GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO workshop_admin;
@@ -26,14 +26,14 @@ END
 $$;
 
 -- Grant readonly privileges
-GRANT CONNECT ON DATABASE CURRENT_DATABASE TO workshop_readonly;
+GRANT CONNECT ON DATABASE workshop_db TO workshop_readonly;
 GRANT USAGE ON SCHEMA public TO workshop_readonly;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO workshop_readonly;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO workshop_readonly;
 GRANT SELECT ON information_schema.tables TO workshop_readonly;
 GRANT SELECT ON information_schema.columns TO workshop_readonly;
-GRANT SELECT ON pg_stat_user_tables TO workshop_readonly;
-GRANT SELECT ON pg_stat_user_indexes TO workshop_readonly;
-GRANT SELECT ON pg_stat_activity TO workshop_readonly;
-GRANT SELECT ON pg_stat_database TO workshop_readonly;
+--GRANT SELECT ON pg_stat_user_tables TO workshop_readonly;
+--GRANT SELECT ON pg_stat_user_indexes TO workshop_readonly;
+--GRANT SELECT ON pg_stat_activity TO workshop_readonly;
+--GRANT SELECT ON pg_stat_database TO workshop_readonly;
 GRANT SELECT ON pg_stat_statements TO workshop_readonly;
