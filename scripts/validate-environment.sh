@@ -85,7 +85,7 @@ else
     check_fail "PostgreSQL not installed"
 fi
 
-if rpm -q postgresql17-server-devel &> /dev/null && rpm -q libpq-devel &> /dev/null; then
+if rpm -q postgresql17-server-devel &> /dev/null; then
     check_pass "PostgreSQL development tools installed"
 else
     check_warn "PostgreSQL development tools not fully installed"
@@ -243,12 +243,6 @@ if [ -n "$MAIN_KB_ID" ]; then
     check_pass "Main Knowledge Base ID configured: $MAIN_KB_ID"
 else
     check_warn "Main Knowledge Base ID not set"
-fi
-
-if [ -n "$IDR_KB_ID" ]; then
-    check_pass "IDR Knowledge Base ID configured: $IDR_KB_ID"
-else
-    check_warn "IDR Knowledge Base ID not set (may not be deployed)"
 fi
 
 echo ""
