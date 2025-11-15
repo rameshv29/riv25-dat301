@@ -140,12 +140,19 @@ run_stress_test() {
     
     log_info "Starting ACU stress test..."
     log_warning "This test will generate high CPU load on the database"
-    log_info "Watch for ACU scaling in CloudWatch or IDR Agent"
+    log_info "Test will run for approximately 600 seconds (10 minutes)..."
+    echo ""
+    
+    log_info "⏳ Creating stress test table (if needed)..."
+    log_info "⏳ Running CPU intensive queries..."
+    log_info "⏳ Monitor CloudWatch for Aurora Serverless v2 ACUUtilization metrics"
     echo ""
     
     # Run stress test with error handling
     if python3 "$STRESS_TEST_SCRIPT" -s "$IDR_SECRET_ARN" -w "$WORKLOAD_TYPE"; then
+        echo ""
         log_success "ACU stress test completed successfully"
+        log_info "Check CloudWatch alarms for Aurora Serverless v2 ACUUtilization threshold breaches"
     else
         log_error "ACU stress test failed"
         return 1

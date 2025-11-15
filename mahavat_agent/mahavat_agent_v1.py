@@ -165,6 +165,8 @@ def create_idr_agent():
 - Provide clear step-by-step output showing what you did
 - When calling update_incident_status, provide the runbook name and detailed steps array
 - If a resource is not found, STOP and report the error - don't guess or simulate
+- **NEVER recommend or execute VACUUM FULL** - it locks tables and causes downtime
+- **NEVER terminate database connections without explicit user confirmation** - always ask first
 
 **Example for IOPS incident:**
 1. retrieve runbook for "IOPS remediation"
@@ -475,7 +477,8 @@ def main():
     # Sidebar
     with st.sidebar:
         st.image("Mahavat.png", width=120)
-        st.subheader("IDR: Incident Detection & Remediation")
+        st.subheader("Mahavat Agent V1")
+        st.caption("Incident Detection & Remediation")
         st.caption("Powered by Amazon Aurora & Bedrock")
         st.divider()
         
@@ -484,7 +487,7 @@ def main():
         st.divider()
         
         # Chat toggle in sidebar
-        if st.button("💬 IDR Agent Chat", use_container_width=True):
+        if st.button("💬 Mahavat Agent V1 Chat", use_container_width=True):
             st.session_state.show_chat = not st.session_state.show_chat
             st.rerun()
         
@@ -505,14 +508,33 @@ def main():
     # Show chat section at bottom if enabled
     if st.session_state.show_chat:
         st.divider()
-        st.markdown("### 💬 IDR Agent Chat")
+        
+        # Chat header with controls
+        chat_col1, chat_col2, chat_col3, chat_col4 = st.columns([3, 1, 1, 1])
+        with chat_col1:
+            st.markdown("### 💬 Mahavat Agent V1 Chat")
+        with chat_col2:
+            if st.button("🗑️ Clear", key="clear_chat", help="Clear chat history and context"):
+                st.session_state.chat_messages = []
+                st.session_state.selected_incident_context = None
+                st.success("Chat cleared!")
+                st.rerun()
+        with chat_col3:
+            if 'chat_expanded' not in st.session_state:
+                st.session_state.chat_expanded = False
+            if st.button("⬆️ Expand" if not st.session_state.chat_expanded else "⬇️ Collapse", 
+                        key="toggle_chat_size", 
+                        help="Expand or collapse chat area"):
+                st.session_state.chat_expanded = not st.session_state.chat_expanded
+                st.rerun()
         
         # Context indicator
         if st.session_state.selected_incident_context:
             st.info(f"🎯 Context: {st.session_state.selected_incident_context}")
         
-        # Chat messages
-        chat_container = st.container(height=300)
+        # Chat messages with dynamic height
+        chat_height = 600 if st.session_state.get('chat_expanded', False) else 300
+        chat_container = st.container(height=chat_height)
         with chat_container:
             for msg in st.session_state.chat_messages:
                 avatar = "Mahavat.png" if msg["role"] == "assistant" else None

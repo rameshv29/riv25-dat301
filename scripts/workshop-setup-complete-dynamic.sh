@@ -36,6 +36,7 @@ MAIN_ENDPOINT=$(get_stack_output "DatabaseEndpoint")
 IDR_CLUSTER_ENDPOINT=$(get_stack_output "IDRClusterEndpoint")
 IDR_INSTANCE_ENDPOINT=$(get_stack_output "IDRInstanceEndpoint")
 MAIN_KB_ID=$(get_stack_output "MainKnowledgeBaseId")
+MAIN_KB_BUCKET=$(get_stack_output "MainKnowledgeBaseBucket")
 IDR_KB_ID=$(get_stack_output "IDRKnowledgeBaseId")
 DYNAMODB_TABLE=$(get_stack_output "IDRIncidentTable")
 IDR_CLUSTER_ARN=$(get_stack_output "IDRClusterArn")
@@ -172,6 +173,7 @@ export IDR_IOPS_ENDPOINT=$IOPS_HOST
 
 # Knowledge Bases
 export MAIN_KB_ID=$MAIN_KB_ID
+export MAIN_KB_BUCKET=$MAIN_KB_BUCKET
 export IDR_KB_ID=$IDR_KB_ID
 
 # DynamoDB

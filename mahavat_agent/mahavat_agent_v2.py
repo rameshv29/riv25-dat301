@@ -294,6 +294,8 @@ For database analysis, ALWAYS use this EXACT format with smaller headers:
 - Confirm log group with user if needed: "I'll analyze logs from /aws/rds/cluster/dat301-ws-cluster/postgresql. Is this correct?"
 - Provide multi-dimensional analysis combining database + infrastructure data
 - Execute parallel analysis across multiple MCP servers when possible
+- **NEVER recommend or execute VACUUM FULL** - it locks tables and causes downtime
+- **NEVER terminate database connections without explicit user confirmation** - always ask first
 
 DATABASE: {DATABASE_NAME}, REGION: {AWS_REGION}
 """
@@ -426,6 +428,8 @@ For remediation, ALWAYS use this EXACT format:
 **CRITICAL Rules:**
 - Follow runbook procedures exactly when available
 - ALWAYS include --region {AWS_REGION} in AWS commands
+- **NEVER recommend or execute VACUUM FULL** - it locks tables and causes downtime
+- **NEVER terminate database connections without explicit user confirmation** - always ask first
 - For comprehensive analysis: Use ALL available tools (PostgreSQL diagnostics, Performance Insights, CloudWatch logs, runbooks)
 - For IDR incidents: Use BOTH local MCP servers AND AWS API for complete analysis:
   * Use postgres_query_provider for database diagnostic workflows
@@ -562,6 +566,8 @@ def create_unified_mahavat_agent():
 - For complex diagnostics: Route to specialists to enforce curated workflows and comprehensive analysis
 - Maintain conversation context across all levels of interaction
 - Combine data from multiple sources when appropriate
+- **NEVER recommend or execute VACUUM FULL** - it locks tables and causes downtime
+- **NEVER terminate database connections without explicit user confirmation** - always ask first
 """
     
     unified_agent = Agent(
@@ -679,7 +685,7 @@ def show_pending_incidents():
     col5.markdown("### :orange[User Action]")
     col5.write("Actions requiring manual intervention")
     
-    runbook_action = col5.button("Get Runbook", use_container_width=True)
+    runbook_action = col5.button("Analyze Incident", use_container_width=True)
     remediate_action = col5.button("Remediate Incident", use_container_width=True)
     
     col5.divider()
@@ -836,8 +842,8 @@ def show_all_incidents():
     for item in incidents:
         incidents_data.append({
             'incident_id': item.get('incident_id', ''),
-            'incidentIdentifier': item.get('incidentIdentifier', ''),
-            'incidentType': item.get('incidentType', ''),
+            'incidentIdentifier': item.get('incidentIdentifier', item.get('incident_identifier', '')),
+            'incidentType': item.get('incidentType', item.get('incident_type', '')),
             'incident_status': item.get('incident_status', ''),
             'incident_time': item.get('incident_time', ''),
             'alarm_name': item.get('alarm_name', ''),
@@ -861,9 +867,10 @@ def show_all_incidents():
             "incident_time": "Incident Time",
             "alarm_name": "Alarm Name",
             "created_at": "Created At",
-            "resolution": "Resolution"
+            "runbook_used": "Runbook Used",
+            "remediation_steps": "Remediation Steps"
         },
-        column_order=("incident_id", "incidentIdentifier", "incidentType", "incident_status", "incident_time", "resolution")
+        column_order=("incident_id", "incidentIdentifier", "incidentType", "incident_status", "incident_time", "runbook_used", "remediation_steps")
     )
     
     st.caption(f"Total incidents: {len(df)}")
@@ -894,7 +901,7 @@ def main():
     # Sidebar
     with st.sidebar:
         st.image("Mahavat.png", width=120)
-        st.subheader("Mahavat Agent")
+        st.subheader("Mahavat Agent V2")
         st.caption("Unified Database Management")
         st.caption("IDR + PostgreSQL Diagnostics")
         st.divider()
@@ -913,7 +920,17 @@ def main():
         
         # MCP Server Status - shows initialization messages here
         with st.expander("🛠️ MCP Server Status"):
-            st.markdown("**MCP servers are initialized and ready**")
+            st.markdown("**Available MCP Servers:**")
+            for server_name, client in mcp_clients.items():
+                if client:
+                    try:
+                        tools = client.list_tools_sync()
+                        st.success(f"✅ {server_name}: {len(tools)} tools available")
+                    except:
+                        st.warning(f"⚠️ {server_name}: Connected but tools unavailable")
+                else:
+                    st.error(f"❌ {server_name}: Not connected")
+            st.caption(f"Total servers: {len(mcp_clients)}")
     
     # Initialize unified agent
     if 'unified_mahavat_agent' not in st.session_state:
@@ -929,14 +946,33 @@ def main():
     # Show chat section at bottom if enabled
     if st.session_state.show_chat:
         st.divider()
-        st.markdown("### 💬 Mahavat Agent Chat")
+        
+        # Chat header with controls
+        chat_col1, chat_col2, chat_col3, chat_col4 = st.columns([3, 1, 1, 1])
+        with chat_col1:
+            st.markdown("### 💬 Mahavat Agent Chat")
+        with chat_col2:
+            if st.button("🗑️ Clear", key="clear_chat", help="Clear chat history and context"):
+                st.session_state.chat_messages = []
+                st.session_state.selected_incident_context = None
+                st.success("Chat cleared!")
+                st.rerun()
+        with chat_col3:
+            if 'chat_expanded' not in st.session_state:
+                st.session_state.chat_expanded = False
+            if st.button("⬆️ Expand" if not st.session_state.chat_expanded else "⬇️ Collapse", 
+                        key="toggle_chat_size", 
+                        help="Expand or collapse chat area"):
+                st.session_state.chat_expanded = not st.session_state.chat_expanded
+                st.rerun()
         
         # Context indicator
         if st.session_state.selected_incident_context:
             st.info(f"🎯 Context: {st.session_state.selected_incident_context}")
         
-        # Chat messages
-        chat_container = st.container(height=300)
+        # Chat messages with dynamic height
+        chat_height = 600 if st.session_state.get('chat_expanded', False) else 300
+        chat_container = st.container(height=chat_height)
         with chat_container:
             for msg in st.session_state.chat_messages:
                 avatar = "Mahavat.png" if msg["role"] == "assistant" else None

@@ -134,11 +134,19 @@ run_stress_test() {
     
     log_info "Starting IOPS stress test..."
     log_warning "This test will generate high I/O load on the database"
+    log_info "Test will run for approximately 600 seconds (10 minutes)..."
+    echo ""
+    
+    log_info "⏳ Initializing pgbench tables (if needed)..."
+    log_info "⏳ Running I/O intensive queries..."
+    log_info "⏳ Monitor CloudWatch for RDS ReadIOPS metrics"
     echo ""
     
     # Run stress test with error handling
     if python3 "$STRESS_TEST_SCRIPT" -s "$IOPS_SECRET_ARN" -w "$WORKLOAD_TYPE"; then
+        echo ""
         log_success "IOPS stress test completed successfully"
+        log_info "Check CloudWatch alarms for RDS ReadIOPS threshold breaches"
     else
         log_error "IOPS stress test failed"
         return 1
