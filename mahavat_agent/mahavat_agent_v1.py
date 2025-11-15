@@ -477,7 +477,7 @@ def main():
     # Sidebar
     with st.sidebar:
         st.image("Mahavat.png", width=120)
-        st.subheader("Mahavat Agent V1")
+        st.subheader("Mahavat Agent v1")
         st.caption("Incident Detection & Remediation")
         st.caption("Powered by Amazon Aurora & Bedrock")
         st.divider()
@@ -487,7 +487,7 @@ def main():
         st.divider()
         
         # Chat toggle in sidebar
-        if st.button("💬 Mahavat Agent V1 Chat", use_container_width=True):
+        if st.button("💬 Mahavat Agent v1 Chat", use_container_width=True):
             st.session_state.show_chat = not st.session_state.show_chat
             st.rerun()
         
@@ -512,7 +512,7 @@ def main():
         # Chat header with controls
         chat_col1, chat_col2, chat_col3, chat_col4 = st.columns([3, 1, 1, 1])
         with chat_col1:
-            st.markdown("### 💬 Mahavat Agent V1 Chat")
+            st.markdown("### 💬 Mahavat Agent v1 Chat")
         with chat_col2:
             if st.button("🗑️ Clear", key="clear_chat", help="Clear chat history and context"):
                 st.session_state.chat_messages = []

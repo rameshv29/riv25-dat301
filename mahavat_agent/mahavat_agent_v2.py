@@ -901,7 +901,7 @@ def main():
     # Sidebar
     with st.sidebar:
         st.image("Mahavat.png", width=120)
-        st.subheader("Mahavat Agent V2")
+        st.subheader("Mahavat Agent v2")
         st.caption("Unified Database Management")
         st.caption("IDR + PostgreSQL Diagnostics")
         st.divider()
