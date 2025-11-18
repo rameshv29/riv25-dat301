@@ -1020,24 +1020,26 @@ def main():
     if st.session_state.show_chat:
         st.divider()
         
-        # Chat header with controls
-        chat_col1, chat_col2, chat_col3, chat_col4 = st.columns([3, 1, 1, 1])
+        # Chat header with controls in top-right corner
+        chat_col1, chat_col2 = st.columns([4, 1])
         with chat_col1:
             st.markdown("### 💬 Mahavat Agent Chat")
         with chat_col2:
-            if st.button("🗑️ Clear", key="clear_chat", help="Clear chat history and context"):
-                st.session_state.chat_messages = []
-                st.session_state.selected_incident_context = None
-                st.success("Chat cleared!")
-                st.rerun()
-        with chat_col3:
-            if 'chat_expanded' not in st.session_state:
-                st.session_state.chat_expanded = False
-            if st.button("⬆️ Expand" if not st.session_state.chat_expanded else "⬇️ Collapse", 
-                        key="toggle_chat_size", 
-                        help="Expand or collapse chat area"):
-                st.session_state.chat_expanded = not st.session_state.chat_expanded
-                st.rerun()
+            btn_col1, btn_col2 = st.columns(2)
+            with btn_col1:
+                if st.button("🗑️", key="clear_chat", help="Clear chat history and context"):
+                    st.session_state.chat_messages = []
+                    st.session_state.selected_incident_context = None
+                    st.success("Chat cleared!")
+                    st.rerun()
+            with btn_col2:
+                if 'chat_expanded' not in st.session_state:
+                    st.session_state.chat_expanded = False
+                if st.button("⬆️" if not st.session_state.chat_expanded else "⬇️", 
+                            key="toggle_chat_size", 
+                            help="Expand or collapse chat area"):
+                    st.session_state.chat_expanded = not st.session_state.chat_expanded
+                    st.rerun()
         
         # Context indicator
         if st.session_state.selected_incident_context:
