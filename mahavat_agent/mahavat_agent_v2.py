@@ -22,11 +22,98 @@ MAIN_KB_ID = os.environ.get('MAIN_KB_ID', '')
 BEDROCK_MODEL_ID = os.environ.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-20250514-v1:0')
 DATABASE_NAME = os.environ.get('DATABASE_NAME', 'workshop_db')
 RDS_CLUSTER_ARN = os.environ.get('RDS_CLUSTER_ARN', '')
+COGNITO_USER_POOL_ID = os.environ.get('COGNITO_USER_POOL_ID', '')
+COGNITO_CLIENT_ID = os.environ.get('COGNITO_CLIENT_ID', '')
 
 # Use main database secret ARN for PostgreSQL
 DATABASE_SECRET_ARN = os.environ.get('DATABASE_SECRET_ARN', '')
 POSTGRES_SECRET_ARN = DATABASE_SECRET_ARN  # Use main DB secret
 POSTGRES_RESOURCE_ARN = RDS_CLUSTER_ARN
+
+# Demo user credentials
+DEMO_USERNAME = "demo"
+DEMO_PASSWORD = "WorkshopDemo2024!"
+
+def authenticate_with_cognito(username: str, password: str) -> tuple[bool, str, dict]:
+    """Authenticate user with AWS Cognito
+    
+    Returns:
+        tuple: (success: bool, message: str, tokens: dict)
+    """
+    try:
+        cognito_client = boto3.client('cognito-idp', region_name=AWS_REGION)
+        
+        response = cognito_client.initiate_auth(
+            ClientId=COGNITO_CLIENT_ID,
+            AuthFlow='USER_PASSWORD_AUTH',
+            AuthParameters={
+                'USERNAME': username,
+                'PASSWORD': password
+            }
+        )
+        
+        return True, "Authentication successful!", response.get('AuthenticationResult', {})
+    
+    except cognito_client.exceptions.NotAuthorizedException:
+        return False, "Invalid username or password", {}
+    except cognito_client.exceptions.UserNotFoundException:
+        return False, "User not found", {}
+    except Exception as e:
+        return False, f"Authentication error: {str(e)}", {}
+
+def show_login_page():
+    """Display full-screen login page for demo user"""
+    
+    # Center content
+    st.markdown("""
+        <div style='text-align: center; padding: 80px 0 40px 0;'>
+            <h1>🐘 Mahavat Agent v2</h1>
+            <h3>Unified Database Management</h3>
+            <p style='color: #666;'>IDR + PostgreSQL Diagnostics</p>
+            <p style='color: #666;'>Powered by Amazon Aurora & Bedrock</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Login form in center column
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.info("**🎯 Workshop Demo Access**\n\nClick below to login with demo credentials and access the Mahavat Agent")
+        
+        if st.button("👤 Login with Demo User", use_container_width=True, type="primary", key="login_button"):
+            with st.spinner("Authenticating with AWS Cognito..."):
+                success, message, tokens = authenticate_with_cognito(DEMO_USERNAME, DEMO_PASSWORD)
+                
+                if success:
+                    st.session_state.authenticated = True
+                    st.session_state.username = DEMO_USERNAME
+                    st.session_state.auth_tokens = tokens
+                    st.session_state.login_time = datetime.now()
+                    st.success(f"✅ {message}")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error(f"❌ {message}")
+        
+        # Workshop info
+        with st.expander("ℹ️ About Demo Access"):
+            st.markdown(f"""
+            **Demo Credentials:**
+            - **Username:** `{DEMO_USERNAME}`
+            - **Password:** Auto-authenticated on button click
+            - **Access Level:** Full access to all features
+            - **Session:** Active until browser tab is closed
+            
+            **Environment:**
+            - **Region:** {AWS_REGION}
+            - **Database:** {DATABASE_NAME}
+            - **DynamoDB:** {DYNAMODB_TABLE}
+            
+            **Features:**
+            - Incident Detection & Remediation (IDR)
+            - PostgreSQL Performance Diagnostics
+            - Multi-MCP Server Integration
+            - Real-time CloudWatch Metrics
+            """)
 
 def get_kpi(iconname, metricname, metricvalue):
     """Create KPI card"""
@@ -298,9 +385,9 @@ For database analysis, ALWAYS use this EXACT format with smaller headers:
 - Confirm log group with user if needed: "I'll analyze logs from /aws/rds/cluster/dat301-ws-cluster/postgresql. Is this correct?"
 - Provide multi-dimensional analysis combining database + infrastructure data
 - Execute parallel analysis across multiple MCP servers when possible
-- **NEVER recommend or execute VACUUM FULL** - it locks tables and causes downtime
-- **NEVER terminate database connections without explicit user confirmation** - always ask first
-- **NEVER create or drop indexes unless explicitly asked by the user**
+- NEVER recommend or execute VACUUM FULL - it locks tables and causes downtime
+- NEVER terminate database connections without explicit user confirmation - always ask first
+- NEVER create or drop indexes unless explicitly asked by the user
 
 **⚠️ COST DISCLAIMER:**
 - **BEFORE making ANY infrastructure changes** (modify-db-instance, modify-db-cluster, scaling, etc.), ALWAYS warn the user:
@@ -458,9 +545,9 @@ For remediation, ALWAYS use this EXACT format:
 **CRITICAL Rules:**
 - Follow runbook procedures exactly when available
 - ALWAYS include --region {AWS_REGION} in AWS commands
-- **NEVER recommend or execute VACUUM FULL** - it locks tables and causes downtime
-- **NEVER terminate database connections without explicit user confirmation** - always ask first
-- **NEVER create or drop indexes unless explicitly asked by the user**
+- NEVER recommend or execute VACUUM FULL - it locks tables and causes downtime
+- NEVER terminate database connections without explicit user confirmation - always ask first
+- NEVER create or drop indexes unless explicitly asked by the user
 
 **⚠️ COST DISCLAIMER:**
 - **BEFORE making ANY infrastructure changes** (modify-db-instance, modify-db-cluster, scaling, etc.), ALWAYS warn the user:
@@ -617,9 +704,9 @@ def create_unified_mahavat_agent():
 - For complex diagnostics: Route to specialists to enforce curated workflows and comprehensive analysis
 - Maintain conversation context across all levels of interaction
 - Combine data from multiple sources when appropriate
-- **NEVER recommend or execute VACUUM FULL** - it locks tables and causes downtime
-- **NEVER terminate database connections without explicit user confirmation** - always ask first
-- **NEVER create or drop indexes unless explicitly asked by the user**
+- NEVER recommend or execute VACUUM FULL - it locks tables and causes downtime
+- NEVER terminate database connections without explicit user confirmation - always ask first
+- NEVER create or drop indexes unless explicitly asked by the user
 
 **⚠️ COST DISCLAIMER:**
 - **BEFORE making ANY infrastructure changes** (modify-db-instance, modify-db-cluster, scaling, etc.), ALWAYS warn the user:
@@ -952,6 +1039,17 @@ def main():
     """Main application"""
     st.set_page_config(page_title="Mahavat Agent - Unified Database Management", layout="wide")
     
+    # Initialize authentication state
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+    if 'username' not in st.session_state:
+        st.session_state.username = None
+    
+    # Check authentication - show login page if not authenticated
+    if not st.session_state.authenticated:
+        show_login_page()
+        return
+    
     st.markdown("""
         <style>
                .block-container {
@@ -977,6 +1075,18 @@ def main():
         st.subheader("Mahavat Agent v2")
         st.caption("Unified Database Management")
         st.caption("IDR + PostgreSQL Diagnostics")
+        
+        # User info and logout
+        st.caption(f"👤 Logged in as: **{st.session_state.username}**")
+        if st.button("🚪 Logout", use_container_width=True, key="logout_button"):
+            st.session_state.authenticated = False
+            st.session_state.username = None
+            st.session_state.auth_tokens = None
+            st.session_state.chat_messages = []
+            st.success("Logged out successfully!")
+            time.sleep(1)
+            st.rerun()
+        
         st.divider()
         
         page = st.radio("Navigation", ["Pending Incidents", "All Incidents"], key="page_nav")

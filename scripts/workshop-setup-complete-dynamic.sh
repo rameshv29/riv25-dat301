@@ -256,7 +256,7 @@ fi
 
 # Run database setup scripts on main database
 echo "🗄️ Running database setup scripts on main database..."
-bash /workshop/scripts/07-database-setup.sh || echo "⚠️  Database setup had warnings (may already be configured)"
+bash /workshop/scripts/07-database-setup.sh "$MAIN_HOST" "$MAIN_PORT" "$MAIN_DB" "$MAIN_USER" "$MAIN_PASS" "$REGION" || echo "⚠️  Database setup had warnings (may already be configured)"
 
 # Set ownership
 chown -R ec2-user:ec2-user /workshop

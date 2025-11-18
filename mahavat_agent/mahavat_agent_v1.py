@@ -8,6 +8,7 @@ import streamlit as st
 import pandas as pd
 import json
 import os
+import time
 from strands import Agent
 from strands.models import BedrockModel
 from strands.tools.mcp import MCPClient
@@ -20,6 +21,93 @@ AWS_REGION = os.environ.get('AWS_REGION', 'us-west-2')
 DYNAMODB_TABLE = os.environ.get('DYNAMODB_TABLE', 'dat-ws-v9-incidents')
 MAIN_KB_ID = os.environ.get('MAIN_KB_ID', '')
 BEDROCK_MODEL_ID = os.environ.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-20250514-v1:0')
+COGNITO_USER_POOL_ID = os.environ.get('COGNITO_USER_POOL_ID', '')
+COGNITO_CLIENT_ID = os.environ.get('COGNITO_CLIENT_ID', '')
+
+# Demo user credentials
+DEMO_USERNAME = "demo"
+DEMO_PASSWORD = "WorkshopDemo2024!"
+
+def authenticate_with_cognito(username: str, password: str) -> tuple[bool, str, dict]:
+    """Authenticate user with AWS Cognito
+    
+    Returns:
+        tuple: (success: bool, message: str, tokens: dict)
+    """
+    try:
+        cognito_client = boto3.client('cognito-idp', region_name=AWS_REGION)
+        
+        response = cognito_client.initiate_auth(
+            ClientId=COGNITO_CLIENT_ID,
+            AuthFlow='USER_PASSWORD_AUTH',
+            AuthParameters={
+                'USERNAME': username,
+                'PASSWORD': password
+            }
+        )
+        
+        return True, "Authentication successful!", response.get('AuthenticationResult', {})
+    
+    except cognito_client.exceptions.NotAuthorizedException:
+        return False, "Invalid username or password", {}
+    except cognito_client.exceptions.UserNotFoundException:
+        return False, "User not found", {}
+    except Exception as e:
+        return False, f"Authentication error: {str(e)}", {}
+
+def show_login_page():
+    """Display full-screen login page for demo user"""
+    
+    # Center content
+    st.markdown("""
+        <div style='text-align: center; padding: 80px 0 40px 0;'>
+            <h1>🐘 Mahavat Agent v1</h1>
+            <h3>Incident Detection & Remediation</h3>
+            <p style='color: #666;'>Powered by Amazon Aurora & Bedrock</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Login form in center column
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.info("**🎯 Workshop Demo Access**\n\nClick below to login with demo credentials and access the Mahavat Agent")
+        
+        if st.button("👤 Login with Demo User", use_container_width=True, type="primary", key="login_button"):
+            with st.spinner("Authenticating with AWS Cognito..."):
+                success, message, tokens = authenticate_with_cognito(DEMO_USERNAME, DEMO_PASSWORD)
+                
+                if success:
+                    st.session_state.authenticated = True
+                    st.session_state.username = DEMO_USERNAME
+                    st.session_state.auth_tokens = tokens
+                    st.session_state.login_time = datetime.now()
+                    st.success(f"✅ {message}")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error(f"❌ {message}")
+        
+        # Workshop info
+        with st.expander("ℹ️ About Demo Access"):
+            st.markdown(f"""
+            **Demo Credentials:**
+            - **Username:** `{DEMO_USERNAME}`
+            - **Password:** Auto-authenticated on button click
+            - **Access Level:** Full access to all features
+            - **Session:** Active until browser tab is closed
+            
+            **Environment:**
+            - **Region:** {AWS_REGION}
+            - **DynamoDB:** {DYNAMODB_TABLE}
+            - **Knowledge Base:** {MAIN_KB_ID}
+            
+            **Features:**
+            - Incident Detection & Remediation
+            - Runbook-driven Automation
+            - AWS Resource Management
+            - Real-time Incident Tracking
+            """)
+
 
 def get_kpi(iconname, metricname, metricvalue):
     """Create KPI card"""
@@ -165,9 +253,9 @@ def create_idr_agent():
 - Provide clear step-by-step output showing what you did
 - When calling update_incident_status, provide the runbook name and detailed steps array
 - If a resource is not found, STOP and report the error - don't guess or simulate
-- **NEVER recommend or execute VACUUM FULL** - it locks tables and causes downtime
-- **NEVER terminate database connections without explicit user confirmation** - always ask first
-- **NEVER create or drop indexes unless explicitly asked by the user**
+- NEVER recommend or execute VACUUM FULL - it locks tables and causes downtime
+- NEVER terminate database connections without explicit user confirmation - always ask first
+- NEVER create or drop indexes unless explicitly asked by the user
 
 **⚠️ COST DISCLAIMER:**
 - **BEFORE making ANY infrastructure changes** (modify-db-instance, modify-db-cluster, scaling, etc.), ALWAYS warn the user:
@@ -462,6 +550,17 @@ def main():
     """Main application"""
     st.set_page_config(page_title="IDR: Incident Detection & Remediation", layout="wide")
     
+    # Initialize authentication state
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+    if 'username' not in st.session_state:
+        st.session_state.username = None
+    
+    # Check authentication - show login page if not authenticated
+    if not st.session_state.authenticated:
+        show_login_page()
+        return
+    
     st.markdown("""
         <style>
                .block-container {
@@ -487,6 +586,18 @@ def main():
         st.subheader("Mahavat Agent v1")
         st.caption("Incident Detection & Remediation")
         st.caption("Powered by Amazon Aurora & Bedrock")
+        
+        # User info and logout
+        st.caption(f"👤 Logged in as: **{st.session_state.username}**")
+        if st.button("🚪 Logout", use_container_width=True, key="logout_button"):
+            st.session_state.authenticated = False
+            st.session_state.username = None
+            st.session_state.auth_tokens = None
+            st.session_state.chat_messages = []
+            st.success("Logged out successfully!")
+            time.sleep(1)
+            st.rerun()
+        
         st.divider()
         
         page = st.radio("Navigation", ["Pending Incidents", "All Incidents"], key="page_nav")

@@ -1,9 +1,21 @@
 #!/bin/bash
 echo "🗄️ DAT301 Workshop - Database Setup"
 
-# Get Main DB credentials
-if [ -n "$MAIN_SECRET_ARN" ]; then
-    MAIN_SECRET=$(aws secretsmanager get-secret-value --secret-id "$MAIN_SECRET_ARN" --region $AWS_REGION --query SecretString --output text)
+# Parse command-line arguments
+# Usage: ./07-database-setup.sh <host> <port> <database> <username> <password> <region>
+if [ $# -eq 6 ]; then
+    # Arguments provided - use them
+    MAIN_HOST="$1"
+    MAIN_PORT="$2"
+    MAIN_DB="$3"
+    MAIN_USER="$4"
+    MAIN_PASS="$5"
+    AWS_REGION="$6"
+    echo "📥 Using provided command-line arguments"
+elif [ -n "$MAIN_SECRET_ARN" ]; then
+    # Fallback to environment variables and secret fetch
+    echo "📥 Fetching credentials from Secrets Manager"
+    MAIN_SECRET=$(aws secretsmanager get-secret-value --secret-id "$MAIN_SECRET_ARN" --region ${AWS_REGION:-us-west-2} --query SecretString --output text)
     MAIN_HOST=$(echo $MAIN_SECRET | jq -r .host)
     MAIN_PORT=$(echo $MAIN_SECRET | jq -r .port)
     MAIN_USER=$(echo $MAIN_SECRET | jq -r .username)
@@ -11,11 +23,15 @@ if [ -n "$MAIN_SECRET_ARN" ]; then
     MAIN_DB=$(echo $MAIN_SECRET | jq -r .dbname)
 fi
 
-
 # Check if main database connection variables are set
 if [ -z "$MAIN_HOST" ] || [ -z "$MAIN_DB" ] || [ -z "$MAIN_USER" ] || [ -z "$MAIN_PASS" ]; then
-    echo "❌ Error: Main database environment variables not set"
-    echo "   Required: MAIN_HOST, MAIN_DB, MAIN_USER, MAIN_PASS"
+    echo "❌ Error: Main database connection parameters not provided"
+    echo ""
+    echo "Usage: $0 <host> <port> <database> <username> <password> <region>"
+    echo "   OR set MAIN_SECRET_ARN environment variable"
+    echo ""
+    echo "Example:"
+    echo "  $0 mydb.cluster-xxx.us-west-2.rds.amazonaws.com 5432 workshop_db admin mypassword us-west-2"
     exit 1
 fi
 
