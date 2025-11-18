@@ -10,21 +10,31 @@ def get_pi_client():
     session = boto3.Session(region_name="us-west-2")
     return session.client('pi')
 
-def get_rds_resource_id():
+def get_rds_resource_id(cluster_identifier: str):
     """Get the correct RDS instance resource ID for Performance Insights"""
     session = boto3.Session(region_name="us-west-2")
     rds_client = session.client('rds')
     
-    # Get the instance from the dev-cluster
-    response = rds_client.describe_db_instances(DBInstanceIdentifier='dev-cluster-instance-1')
+    # Get the instance
+    response = rds_client.describe_db_instances(DBInstanceIdentifier=cluster_identifier)
     return response['DBInstances'][0]['DbiResourceId']
 
 @mcp.tool()
-def get_performance_insights_metrics(metric_queries: list = None, start_time: str = None, end_time: str = None):
-    """Get Performance Insights metrics for RDS instance"""
+def get_performance_insights_metrics(cluster_identifier: str, metric_queries: list = None, start_time: str = None, end_time: str = None):
+    """Get Performance Insights metrics for RDS instance
+    
+    Args:
+        cluster_identifier: RDS instance identifier (REQUIRED)
+        metric_queries: List of metric queries
+        start_time: Start time in ISO format
+        end_time: End time in ISO format
+    """
     try:
+        if not cluster_identifier:
+            return {"error": "cluster_identifier is required. Please provide the RDS instance identifier."}
+        
         pi_client = get_pi_client()
-        resource_id = get_rds_resource_id()
+        resource_id = get_rds_resource_id(cluster_identifier)
         
         if not start_time:
             start_time = (datetime.utcnow() - timedelta(hours=1)).isoformat()
@@ -53,11 +63,19 @@ def get_performance_insights_metrics(metric_queries: list = None, start_time: st
         return {"error": str(e)}
 
 @mcp.tool()
-def get_top_sql_statements(limit: int = 10):
-    """Get top SQL statements from Performance Insights"""
+def get_top_sql_statements(cluster_identifier: str, limit: int = 10):
+    """Get top SQL statements from Performance Insights
+    
+    Args:
+        cluster_identifier: RDS instance identifier (REQUIRED)
+        limit: Maximum number of results to return
+    """
     try:
+        if not cluster_identifier:
+            return {"error": "cluster_identifier is required. Please provide the RDS instance identifier."}
+        
         pi_client = get_pi_client()
-        resource_id = get_rds_resource_id()
+        resource_id = get_rds_resource_id(cluster_identifier)
         
         end_time = datetime.utcnow()
         start_time = end_time - timedelta(hours=1)
@@ -77,11 +95,19 @@ def get_top_sql_statements(limit: int = 10):
         return {"error": str(e)}
 
 @mcp.tool()
-def get_wait_events(limit: int = 10):
-    """Get top wait events from Performance Insights for lock analysis"""
+def get_wait_events(cluster_identifier: str, limit: int = 10):
+    """Get top wait events from Performance Insights for lock analysis
+    
+    Args:
+        cluster_identifier: RDS instance identifier (REQUIRED)
+        limit: Maximum number of results to return
+    """
     try:
+        if not cluster_identifier:
+            return {"error": "cluster_identifier is required. Please provide the RDS instance identifier."}
+        
         pi_client = get_pi_client()
-        resource_id = get_rds_resource_id()
+        resource_id = get_rds_resource_id(cluster_identifier)
         
         end_time = datetime.utcnow()
         start_time = end_time - timedelta(hours=1)

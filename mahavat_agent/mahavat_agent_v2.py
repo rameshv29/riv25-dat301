@@ -281,11 +281,15 @@ For database analysis, ALWAYS use this EXACT format with smaller headers:
 
 **Multi-Server Capabilities:**
 • PostgreSQL: Direct SQL execution and database analysis
-• Performance Insights: RDS metrics and top SQL queries
+• Performance Insights: RDS metrics and top SQL queries (use get_performance_insights_metrics, get_top_sql_statements, get_wait_events)
 • CloudWatch: Log analysis and infrastructure metrics (Default: /aws/rds/cluster/dat301-ws-cluster/postgresql)
 • AWS API: RDS configuration and parameter analysis
 • AWS Docs: Best practices and troubleshooting guides
 • Main KB: Runbook retrieval (ID: {MAIN_KB_ID})
+
+**Query Tools (Use Instead of Raw SQL):**
+• get_index_statistics(index_names=[...]) - Get statistics for specific indexes
+• get_table_statistics(table_name="...") - Get statistics for a specific table
 
 **CRITICAL Rules:**
 - Use all available tools for comprehensive analysis
@@ -296,6 +300,32 @@ For database analysis, ALWAYS use this EXACT format with smaller headers:
 - Execute parallel analysis across multiple MCP servers when possible
 - **NEVER recommend or execute VACUUM FULL** - it locks tables and causes downtime
 - **NEVER terminate database connections without explicit user confirmation** - always ask first
+- **NEVER create or drop indexes unless explicitly asked by the user**
+
+**⚠️ COST DISCLAIMER:**
+- **BEFORE making ANY infrastructure changes** (modify-db-instance, modify-db-cluster, scaling, etc.), ALWAYS warn the user:
+  "⚠️ WARNING: This change will modify AWS infrastructure and may incur additional costs. The modification includes [describe change]. Do you want to proceed?"
+- Wait for explicit user confirmation before executing infrastructure modifications
+- This applies to: IOPS changes, instance class changes, storage modifications, ACU scaling, parameter changes, etc.
+
+**AWS CLI Command Validation (CRITICAL):**
+- BEFORE calling call_aws, verify:
+  * All parameters have values (no empty --param without value)
+  * JSON structures use correct AWS field names (check AWS CLI docs)
+  * Use dedicated MCP tools when available instead of call_aws
+- For Performance Insights: ALWAYS use get_performance_insights_metrics(), get_top_sql_statements(), get_wait_events() tools
+- For RDS Data API: Use secret NAME not full ARN (e.g., "my-secret" not "arn:aws:secretsmanager:...")
+- If call_aws fails with validation error, use dedicated MCP tool instead
+
+**Query Validation (CRITICAL):**
+- BEFORE executing queries with run_query(), verify:
+  * No empty IN clauses: WHERE col IN () ❌
+  * No placeholder values: WHERE col = '<placeholder>' or WHERE col = '< Add value >' ❌
+  * All parameters have actual values from user or context
+- For pg_stat queries, use dedicated tools:
+  * get_index_statistics(index_names=["idx1", "idx2"]) instead of raw pg_stat_user_indexes
+  * get_table_statistics(table_name="actual_table") instead of raw pg_stat_user_tables
+- If query needs parameters, ask user for actual values first
 
 DATABASE: {DATABASE_NAME}, REGION: {AWS_REGION}
 """
@@ -430,10 +460,28 @@ For remediation, ALWAYS use this EXACT format:
 - ALWAYS include --region {AWS_REGION} in AWS commands
 - **NEVER recommend or execute VACUUM FULL** - it locks tables and causes downtime
 - **NEVER terminate database connections without explicit user confirmation** - always ask first
+- **NEVER create or drop indexes unless explicitly asked by the user**
+
+**⚠️ COST DISCLAIMER:**
+- **BEFORE making ANY infrastructure changes** (modify-db-instance, modify-db-cluster, scaling, etc.), ALWAYS warn the user:
+  "⚠️ WARNING: This change will modify AWS infrastructure and may incur additional costs. The modification includes [describe change]. Do you want to proceed?"
+- Wait for explicit user confirmation before executing infrastructure modifications
+- This applies to: IOPS changes, instance class changes, storage modifications, ACU scaling, parameter changes, etc.
+
+**AWS CLI Command Validation (CRITICAL):**
+- BEFORE calling call_aws, verify:
+  * All parameters have values (no empty --param without value)
+  * JSON structures use correct AWS field names
+  * Use dedicated MCP tools when available instead of call_aws
+- For Performance Insights: ALWAYS use get_performance_insights_metrics(), get_top_sql_statements(), get_wait_events() tools
+- For RDS Data API: Use secret NAME not full ARN (e.g., "my-secret" not "arn:aws:secretsmanager:...")
+- If call_aws fails with validation error, use dedicated MCP tool instead
 - For comprehensive analysis: Use ALL available tools (PostgreSQL diagnostics, Performance Insights, CloudWatch logs, runbooks)
 - For IDR incidents: Use BOTH local MCP servers AND AWS API for complete analysis:
   * Use postgres_query_provider for database diagnostic workflows
-  * Use performance_insights for Performance Insights metrics (configure for target instance)
+  * Use get_performance_insights_metrics(cluster_identifier="target-instance") for Performance Insights metrics
+  * Use get_top_sql_statements(cluster_identifier="target-instance") for top queries
+  * Use get_wait_events(cluster_identifier="target-instance") for wait event analysis
   * Use PostgreSQL MCP with RDS Data API for direct database queries on target instance
   * Use CloudWatch MCP for metrics and logs from target cluster
   * Use AWS API for cluster configuration and log group discovery
@@ -445,17 +493,20 @@ For remediation, ALWAYS use this EXACT format:
 
 **IDR Dynamic Instance Targeting:**
 1. Extract cluster/instance name from incidentIdentifier
-2. Use AWS API MCP to get cluster ARN, secret ARN, and database details for target cluster
-3. Use AWS API MCP with RDS Data API to execute database queries on target cluster:
-   - aws rds-data execute-statement --resource-arn <cluster-arn> --secret-arn <secret-arn> --sql "SELECT * FROM pg_stat_statements"
-4. Use performance_insights with cluster_identifier parameter for Performance Insights metrics
-5. Use CloudWatch MCP for cluster-specific metrics and log groups (get correct log group from AWS API)
-6. Use PostgreSQL MCP ONLY for runbook queries from main database
-7. Combine all data sources for comprehensive incident analysis
+2. Use AWS API MCP to get cluster ARN and database details for target cluster
+3. For RDS Data API queries, use secret NAME (not full ARN) to avoid length validation errors:
+   - Example: aws rds-data execute-statement --resource-arn <cluster-arn> --secret-arn my-secret-name --database postgres --sql "SELECT version()"
+   - DO NOT use full secret ARN (too long for CLI validation)
+4. Use get_performance_insights_metrics(cluster_identifier="target-instance") for PI metrics
+5. Use get_top_sql_statements(cluster_identifier="target-instance") for top queries
+6. Use get_wait_events(cluster_identifier="target-instance") for wait events
+7. Use CloudWatch MCP for cluster-specific metrics and log groups (get correct log group from AWS API)
+8. Use PostgreSQL MCP ONLY for runbook queries from main database
+9. Combine all data sources for comprehensive incident analysis
 
 **Key Instructions for IDR Tools:**
-- AWS API MCP: Get cluster config, execute RDS Data API queries on target cluster, discover log groups
-- performance_insights: MUST call get_performance_insights_metrics(), get_top_sql_statements(), get_wait_events() with cluster_identifier parameter
+- AWS API MCP: Get cluster config, discover log groups (avoid RDS Data API due to secret ARN length limits)
+- Performance Insights: ALWAYS use get_performance_insights_metrics(cluster_identifier="..."), get_top_sql_statements(cluster_identifier="..."), get_wait_events(cluster_identifier="...") - DO NOT use call_aws for PI queries
 - CloudWatch MCP: Use describe_log_groups and execute_log_insights_query with discovered log groups
 - Main KB: Retrieve and display runbook content prominently at the start
 - DO NOT USE: PostgreSQL MCP server or postgres_query_provider (wrong database/not needed for IDR runbook)
@@ -568,6 +619,28 @@ def create_unified_mahavat_agent():
 - Combine data from multiple sources when appropriate
 - **NEVER recommend or execute VACUUM FULL** - it locks tables and causes downtime
 - **NEVER terminate database connections without explicit user confirmation** - always ask first
+- **NEVER create or drop indexes unless explicitly asked by the user**
+
+**⚠️ COST DISCLAIMER:**
+- **BEFORE making ANY infrastructure changes** (modify-db-instance, modify-db-cluster, scaling, etc.), ALWAYS warn the user:
+  "⚠️ WARNING: This change will modify AWS infrastructure and may incur additional costs. The modification includes [describe change]. Do you want to proceed?"
+- Wait for explicit user confirmation before executing infrastructure modifications
+- This applies to: IOPS changes, instance class changes, storage modifications, ACU scaling, parameter changes, etc.
+
+**AWS CLI Command Validation (CRITICAL):**
+- BEFORE calling call_aws, verify:
+  * All parameters have values (no empty --param without value)
+  * JSON structures use correct AWS field names
+  * Use dedicated MCP tools when available instead of call_aws
+- For Performance Insights: ALWAYS use get_performance_insights_metrics(), get_top_sql_statements(), get_wait_events() tools
+- For RDS Data API: Use secret NAME not full ARN (e.g., "my-secret" not "arn:aws:secretsmanager:...")
+- If call_aws fails with validation error, use dedicated MCP tool instead
+
+**Query Validation (CRITICAL):**
+- BEFORE executing queries, verify:
+  * No empty IN clauses or placeholder values
+  * Use get_index_statistics() and get_table_statistics() for pg_stat queries
+  * Ask user for actual values if parameters are missing
 """
     
     unified_agent = Agent(

@@ -167,6 +167,13 @@ def create_idr_agent():
 - If a resource is not found, STOP and report the error - don't guess or simulate
 - **NEVER recommend or execute VACUUM FULL** - it locks tables and causes downtime
 - **NEVER terminate database connections without explicit user confirmation** - always ask first
+- **NEVER create or drop indexes unless explicitly asked by the user**
+
+**⚠️ COST DISCLAIMER:**
+- **BEFORE making ANY infrastructure changes** (modify-db-instance, modify-db-cluster, scaling, etc.), ALWAYS warn the user:
+  "⚠️ WARNING: This change will modify AWS infrastructure and may incur additional costs. The modification includes [describe change]. Do you want to proceed?"
+- Wait for explicit user confirmation before executing infrastructure modifications
+- This applies to: IOPS changes, instance class changes, storage modifications, ACU scaling, parameter changes, etc.
 
 **Example for IOPS incident:**
 1. retrieve runbook for "IOPS remediation"

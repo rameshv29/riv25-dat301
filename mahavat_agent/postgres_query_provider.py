@@ -2504,5 +2504,81 @@ def execute_diagnostic_step(step_data: dict) -> dict:
         "instructions": f"Execute this query using the PostgreSQL MCP server's run_query tool: {step_data['query']}"
     }
 
+@mcp.tool()
+def get_index_statistics(index_names: List[str]) -> dict:
+    """Get detailed statistics for specific indexes
+    
+    Args:
+        index_names: List of index names to analyze (e.g., ["idx_customer_email", "idx_order_date"])
+    
+    Returns:
+        Dictionary with query and description for execution by PostgreSQL MCP server
+    """
+    if not index_names or len(index_names) == 0:
+        return {"error": "index_names parameter is required. Provide a list of index names to analyze."}
+    
+    # Build IN clause safely
+    index_list = "', '".join(index_names)
+    query = f"""
+        SELECT 
+            schemaname,
+            relname as tablename,
+            indexrelname as indexname,
+            idx_scan,
+            idx_tup_read,
+            idx_tup_fetch,
+            pg_size_pretty(pg_relation_size(indexrelid)) as index_size
+        FROM pg_stat_user_indexes 
+        WHERE indexrelname IN ('{index_list}')
+        ORDER BY indexrelname;
+    """
+    
+    return {
+        "tool_to_use": "run_query",
+        "sql_query": query,
+        "step_description": f"Get statistics for indexes: {', '.join(index_names)}",
+        "instructions": f"Execute this query using the PostgreSQL MCP server's run_query tool to get index statistics"
+    }
+
+@mcp.tool()
+def get_table_statistics(table_name: str) -> dict:
+    """Get detailed statistics for a specific table
+    
+    Args:
+        table_name: Name of the table to analyze (e.g., "customer", "orders")
+    
+    Returns:
+        Dictionary with query and description for execution by PostgreSQL MCP server
+    """
+    if not table_name or table_name.strip() == "":
+        return {"error": "table_name parameter is required. Provide the name of the table to analyze."}
+    
+    # Remove any placeholder text
+    if '<' in table_name or '>' in table_name or 'add' in table_name.lower():
+        return {"error": f"Invalid table_name '{table_name}'. Please provide an actual table name, not a placeholder."}
+    
+    query = f"""
+        SELECT 
+            schemaname,
+            relname as tablename,
+            seq_scan,
+            seq_tup_read,
+            idx_scan,
+            idx_tup_fetch,
+            n_live_tup,
+            n_dead_tup,
+            pg_size_pretty(pg_relation_size(schemaname||'.'||relname)) as table_size
+        FROM pg_stat_user_tables 
+        WHERE relname = '{table_name}'
+        ORDER BY relname;
+    """
+    
+    return {
+        "tool_to_use": "run_query",
+        "sql_query": query,
+        "step_description": f"Get statistics for table: {table_name}",
+        "instructions": f"Execute this query using the PostgreSQL MCP server's run_query tool to get table statistics"
+    }
+
 if __name__ == "__main__":
     mcp.run()
