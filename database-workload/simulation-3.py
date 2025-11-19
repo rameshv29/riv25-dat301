@@ -6,6 +6,10 @@ import os
 import sys
 from datetime import datetime
 
+# ============================================================================
+# Database Connection Load Tester
+# ============================================================================
+
 # Load environment variables
 load_dotenv()
 
@@ -18,21 +22,82 @@ db_params = {
     'port': os.getenv('DB_PORT')
 }
 
-def log_message(session, message):
-    """Helper function to print timestamped log messages"""
-    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print(f"[{timestamp}] {session}: {message}")
+def print_banner():
+    """Print application banner"""
+    print("\n" + "="*80)
+    print(" 🔥 DATABASE LOAD TESTING TOOL")
+    print("="*80)
+    print(f" 📅 Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("="*80 + "\n")
+
+def print_summary(stats):
+    """Print execution summary"""
+    print("\n" + "="*80)
+    print(" 📊 EXECUTION SUMMARY")
+    print("="*80)
+    print(f" ✓ Total Sessions      : {stats['total_sessions']}")
+    print(f" ✓ Successful Sessions : {stats['successful']}")
+    print(f" ✗ Failed Sessions     : {stats['failed']}")
+    print(f" ⏱  Total Duration     : {stats['duration']:.2f} seconds")
+    if stats['total_sessions'] > 0:
+        print(f" 📈 Success Rate       : {(stats['successful']/stats['total_sessions']*100):.1f}%")
+    print("="*80)
+    print(f" 🏁 Completed at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("="*80 + "\n")
+
+def log_message(session, message, level='INFO'):
+    """
+    Helper function to print formatted log messages
+    
+    Args:
+        session: Session identifier
+        message: Log message
+        level: Log level (INFO, SUCCESS, ERROR, WARNING, etc.)
+    """
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+    
+    icons = {
+        'INFO': '📘',
+        'SUCCESS': '✅',
+        'ERROR': '❌',
+        'WARNING': '⚠️',
+        'PROGRESS': '⚙️',
+        'START': '🚀',
+        'FINISH': '🎯'
+    }
+    
+    icon = icons.get(level, '📝')
+    print(f"[{timestamp}] {icon} [{session:^15}] {message}")
 
 def run_query(iteration):
-    """Execute multiple queries in single transaction"""
-    conn = psycopg2.connect(**db_params)
-    conn.autocommit = False  # Ensure we're in a transaction
-    cur = conn.cursor()
-    try:
-        cur.execute("SET statement_timeout = '300s';")
-        cur.execute("BEGIN;")
+    """
+    Execute multiple queries in single transaction
+    
+    Args:
+        iteration: Session number
         
-        log_message(f"Session {iteration}", "Starting transaction...")
+    Returns:
+        dict: Execution statistics
+    """
+    session_name = f"Session-{iteration:02d}"
+    start_time = time.time()
+    
+    conn = None
+    cur = None
+    
+    try:
+        log_message(session_name, "Establishing database connection...", 'START')
+        conn = psycopg2.connect(**db_params)
+        conn.autocommit = False  # Ensure we're in a transaction
+        cur = conn.cursor()
+        
+        log_message(session_name, "Connection established successfully", 'SUCCESS')
+        
+        cur.execute("SET statement_timeout = '300s';")
+        log_message(session_name, "Statement timeout set to 300s", 'INFO')
+        
+        cur.execute("BEGIN;")
+        log_message(session_name, "Transaction started", 'INFO')
         
         query = """
         SELECT count(*) 
@@ -43,27 +108,66 @@ def run_query(iteration):
         
         # Run query multiple times in same transaction
         for i in range(3):
-            log_message(f"Session {iteration}", f"Executing query {i+1}/5...")
+            query_start = time.time()
+            log_message(session_name, f"Executing query {i+1}/3...", 'PROGRESS')
+            
             cur.execute(query)
             result = cur.fetchone()
-            log_message(f"Session {iteration}", f"Query {i+1} completed: {result[0]} rows")
+            query_duration = time.time() - query_start
+            
+            log_message(session_name, 
+                       f"Query {i+1}/3 completed in {query_duration:.2f}s | Result: {result[0]:,} rows", 
+                       'SUCCESS')
         
         conn.commit()
-        log_message(f"Session {iteration}", "Transaction committed")
+        total_duration = time.time() - start_time
+        log_message(session_name, 
+                   f"Transaction committed successfully | Total time: {total_duration:.2f}s", 
+                   'FINISH')
+        
+        return {'success': True, 'duration': total_duration, 'session': session_name}
         
     except Exception as e:
-        log_message(f"Session {iteration}", f"Error: {e}")
-        conn.rollback()
+        total_duration = time.time() - start_time
+        error_msg = str(e)[:100] + ('...' if len(str(e)) > 100 else '')
+        log_message(session_name, f"Error: {error_msg}", 'ERROR')
+        
+        try:
+            if conn:
+                conn.rollback()
+                log_message(session_name, "Transaction rolled back", 'WARNING')
+        except Exception as rollback_error:
+            log_message(session_name, f"Rollback failed: {rollback_error}", 'ERROR')
+        
+        return {'success': False, 'duration': total_duration, 'session': session_name}
+        
     finally:
-        cur.close()
-        conn.close()
+        try:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
+            log_message(session_name, "Connection closed", 'INFO')
+        except Exception as e:
+            log_message(session_name, f"Error closing connection: {e}", 'WARNING')
 
 def main():
+    """Main execution function"""
+    print_banner()
+    
     num_connections = int(os.getenv('NUM_CONNECTIONS', 2))
     
-    log_message("Main", f"Starting with {num_connections} parallel connections")
+    log_message("MAIN", f"Starting load test with {num_connections} parallel connections", 'INFO')
+    log_message("MAIN", f"Target: {db_params['user']}@{db_params['host']}:{db_params['port']}/{db_params['dbname']}", 'INFO')
+    print()
+    
+    start_time = time.time()
+    results = []
     
     try:
+        log_message("MAIN", f"Launching {num_connections} worker threads...", 'START')
+        print()
+        
         with ThreadPoolExecutor(max_workers=num_connections) as executor:
             futures = [
                 executor.submit(run_query, i+1)
@@ -71,12 +175,35 @@ def main():
             ]
             
             for future in futures:
-                future.result()
+                result = future.result()
+                results.append(result)
         
-        log_message("Main", "All queries completed")
+        # Calculate statistics
+        total_duration = time.time() - start_time
+        successful = sum(1 for r in results if r['success'])
+        failed = len(results) - successful
+        
+        stats = {
+            'total_sessions': num_connections,
+            'successful': successful,
+            'failed': failed,
+            'duration': total_duration
+        }
+        
+        print_summary(stats)
+        
+        log_message("MAIN", "All queries completed", 'FINISH')
         
     except KeyboardInterrupt:
-        log_message("Main", "Received interrupt signal")
+        print("\n")
+        log_message("MAIN", "Received interrupt signal (Ctrl+C)", 'WARNING')
+        log_message("MAIN", "Shutting down gracefully...", 'WARNING')
+        sys.exit(130)
+        
+    except Exception as e:
+        log_message("MAIN", f"Fatal error: {str(e)}", 'ERROR')
+        sys.exit(1)
+        
     finally:
         sys.exit(0)
 

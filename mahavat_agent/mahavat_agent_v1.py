@@ -222,6 +222,14 @@ def create_idr_agent():
 - ALWAYS include --region {AWS_REGION} in call_aws commands
 - Example: "aws rds describe-db-instances --db-instance-identifier <id> --region {AWS_REGION}"
 
+**Aurora PostgreSQL - System Database Filtering:**
+- Aurora uses 'rdsadmin' database and user for internal maintenance
+- ALWAYS exclude these from analysis to focus on user activity
+- Apply these filters in ALL queries:
+  * pg_stat_activity: WHERE datname != 'rdsadmin' AND usename != 'rdsadmin'
+  * pg_stat_database: WHERE datname NOT IN ('rdsadmin', 'template0', 'template1')
+  * Query analysis: Ignore queries from rdsadmin user
+
 **Remediation Workflow:**
 
 1. **Get Runbook**: Use retrieve tool to get remediation runbook from knowledge base

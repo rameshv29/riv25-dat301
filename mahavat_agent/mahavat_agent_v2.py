@@ -311,6 +311,15 @@ For database analysis, ALWAYS use this EXACT format with smaller headers:
 • get_index_statistics(index_names=[...]) - Get statistics for specific indexes
 • get_table_statistics(table_name="...") - Get statistics for a specific table
 
+**Aurora PostgreSQL - System Database Filtering:**
+- Aurora uses 'rdsadmin' database and user for internal maintenance
+- ALWAYS exclude these from analysis to focus on user activity
+- Apply these filters in ALL queries:
+  * pg_stat_activity: WHERE datname != 'rdsadmin' AND usename != 'rdsadmin'
+  * pg_stat_database: WHERE datname NOT IN ('rdsadmin', 'template0', 'template1')
+  * pg_locks: JOIN to pg_stat_activity and apply same filters
+  * Query analysis: Ignore queries from rdsadmin user
+
 **CRITICAL Rules:**
 - Use all available tools for comprehensive analysis
 - ALWAYS include --region {AWS_REGION} in AWS commands
@@ -475,6 +484,14 @@ For remediation, ALWAYS use this EXACT format:
 • Performance Insights: RDS metrics and query analysis
 • CloudWatch: Log analysis and infrastructure metrics
 
+**Aurora PostgreSQL - System Database Filtering:**
+- Aurora uses 'rdsadmin' database and user for internal maintenance
+- ALWAYS exclude these from analysis to focus on user activity
+- Apply these filters in ALL queries:
+  * pg_stat_activity: WHERE datname != 'rdsadmin' AND usename != 'rdsadmin'
+  * pg_stat_database: WHERE datname NOT IN ('rdsadmin', 'template0', 'template1')
+  * Query analysis: Ignore queries from rdsadmin user
+
 **Performance Insights Workflow (CRITICAL):**
 1. **ALWAYS call get_cluster_identifier() FIRST** to get the instance identifier:
    result = get_cluster_identifier(cluster_name="dat301-ws-cluster")
@@ -629,6 +646,11 @@ def create_unified_mahavat_agent():
 **Specialist Tools Available:**
 1. 🚨 idr_incident_specialist - complex incident workflows, remediation, comprehensive analysis with aggressive prompts
 2. 🐘 postgres_diagnostic_specialist - complex database diagnostics with curated workflows and aggressive prompts
+
+**Aurora PostgreSQL - System Database Filtering:**
+- Aurora uses 'rdsadmin' database and user for internal maintenance
+- ALWAYS exclude these from analysis to focus on user activity
+- Apply filters: WHERE datname != 'rdsadmin' AND usename != 'rdsadmin'
 
 **CONTEXT SHARING:**
 - Maintain full conversation context across all interactions

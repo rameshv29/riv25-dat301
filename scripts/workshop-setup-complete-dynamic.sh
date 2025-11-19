@@ -193,6 +193,10 @@ alias main-test='/workshop/load-test/run_stress_test.sh -s \$MAIN_SECRET_ARN -w 
 alias simulation-2='cd /workshop/database-workload && python3 simulation-2.py'
 alias simulation-3='cd /workshop/database-workload && python3 simulation-3.py'
 
+# Mahavat Agent aliases
+alias start-mahavat-v1='cd /workshop/mahavat_agent && /workshop/mahavat_agent/mahavat_agent_v1.sh'
+alias start-mahavat-v2='cd /workshop/mahavat_agent && /workshop/mahavat_agent/mahavat_agent_v2.sh'
+
 # Auto-activate virtual environment
 if [ -f /workshop/mahavat_agent/venv/bin/activate ]; then
     source /workshop/mahavat_agent/venv/bin/activate
