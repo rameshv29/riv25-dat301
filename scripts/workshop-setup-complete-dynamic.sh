@@ -189,6 +189,10 @@ alias iops-test='/workshop/load-test/iops-test.sh'
 alias acu-test='/workshop/load-test/acu-test.sh'
 alias main-test='/workshop/load-test/run_stress_test.sh -s \$MAIN_SECRET_ARN -w CPU'
 
+# Simulation aliases
+alias simulation-2='cd /workshop/database-workload && python3 simulation-2.py'
+alias simulation-3='cd /workshop/database-workload && python3 simulation-3.py'
+
 # Auto-activate virtual environment
 if [ -f /workshop/mahavat_agent/venv/bin/activate ]; then
     source /workshop/mahavat_agent/venv/bin/activate
@@ -215,30 +219,8 @@ fi
 # Activate and install requirements
 source venv/bin/activate
 
-# Create corrected requirements.txt with proper strands package names
-cat > requirements-corrected.txt << 'REQ_EOF'
-strands-agents
-strands-agents-tools
-boto3
-psycopg2-binary
-langchain
-langchain-community
-pypdf
-docx2txt
-unstructured
-markdown
-pdfminer
-streamlit
-beautifulsoup4
-requests
-pgvector
-plotly
-psycopg[binary]>=3.1.0
-psycopg-pool>=3.1.0
-REQ_EOF
-
 echo "📦 Installing Python dependencies..."
-pip3 install -q -r requirements-corrected.txt
+pip3 install -q -r requirements.txt
 deactivate
 
 echo "✅ Python dependencies installed"
