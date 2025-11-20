@@ -246,6 +246,70 @@ fi
 echo "🗄️ Running database setup scripts on main database..."
 bash /workshop/scripts/07-database-setup.sh "$MAIN_HOST" "$MAIN_PORT" "$MAIN_DB" "$MAIN_USER" "$MAIN_PASS" "$REGION" || echo "⚠️  Database setup had warnings (may already be configured)"
 
+# Enable Performance Insights on all database instances
+echo "📊 Checking Performance Insights status..."
+
+# Function to enable Performance Insights on an instance
+enable_performance_insights() {
+    local instance_id=$1
+    local instance_name=$2
+    
+    echo "  Checking $instance_name ($instance_id)..."
+    
+    # Check if Performance Insights is enabled
+    pi_enabled=$(aws rds describe-db-instances \
+        --db-instance-identifier "$instance_id" \
+        --region "$REGION" \
+        --query 'DBInstances[0].PerformanceInsightsEnabled' \
+        --output text 2>/dev/null)
+    
+    if [ "$pi_enabled" = "True" ]; then
+        echo "  ✅ Performance Insights already enabled on $instance_name"
+    else
+        echo "  🔧 Enabling Performance Insights on $instance_name..."
+        aws rds modify-db-instance \
+            --db-instance-identifier "$instance_id" \
+            --enable-performance-insights \
+            --performance-insights-retention-period 7 \
+            --apply-immediately \
+            --region "$REGION" >/dev/null 2>&1
+        
+        if [ $? -eq 0 ]; then
+            echo "  ✅ Performance Insights enabled on $instance_name"
+        else
+            echo "  ⚠️  Failed to enable Performance Insights on $instance_name"
+        fi
+    fi
+}
+
+# Get instance identifiers from cluster members
+MAIN_INSTANCE=$(aws rds describe-db-clusters \
+    --db-cluster-identifier "$(echo $MAIN_HOST | cut -d'.' -f1)" \
+    --region "$REGION" \
+    --query 'DBClusters[0].DBClusterMembers[0].DBInstanceIdentifier' \
+    --output text 2>/dev/null)
+
+IDR_ACU_INSTANCE=$(aws rds describe-db-clusters \
+    --db-cluster-identifier "$(echo $IDR_HOST | cut -d'.' -f1)" \
+    --region "$REGION" \
+    --query 'DBClusters[0].DBClusterMembers[0].DBInstanceIdentifier' \
+    --output text 2>/dev/null)
+
+# Enable Performance Insights on all instances
+if [ -n "$MAIN_INSTANCE" ] && [ "$MAIN_INSTANCE" != "None" ]; then
+    enable_performance_insights "$MAIN_INSTANCE" "Main Database"
+fi
+
+if [ -n "$IDR_ACU_INSTANCE" ] && [ "$IDR_ACU_INSTANCE" != "None" ]; then
+    enable_performance_insights "$IDR_ACU_INSTANCE" "IDR ACU Cluster"
+fi
+
+if [ -n "$IOPS_INSTANCE" ] && [ "$IOPS_INSTANCE" != "None" ]; then
+    enable_performance_insights "$IOPS_INSTANCE" "IDR IOPS Instance"
+fi
+
+echo "✅ Performance Insights check completed"
+
 # Create Cognito demo user
 echo "👤 Creating Cognito demo user..."
 aws cognito-idp admin-create-user \
