@@ -24,9 +24,9 @@ BEDROCK_MODEL_ID = os.environ.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonne
 COGNITO_USER_POOL_ID = os.environ.get('COGNITO_USER_POOL_ID', '')
 COGNITO_CLIENT_ID = os.environ.get('COGNITO_CLIENT_ID', '')
 
-# Demo user credentials
-DEMO_USERNAME = "demo"
-DEMO_PASSWORD = "WorkshopDemo2024!"
+# Demo user credentials from environment
+DEMO_USERNAME = os.environ.get('DEMO_USERNAME', 'demo')
+DEMO_PASSWORD = os.environ.get('DEMO_PASSWORD', 'WorkshopDemo2025!')
 
 def authenticate_with_cognito(username: str, password: str) -> tuple[bool, str, dict]:
     """Authenticate user with AWS Cognito
@@ -58,22 +58,79 @@ def authenticate_with_cognito(username: str, password: str) -> tuple[bool, str, 
 def show_login_page():
     """Display full-screen login page for demo user"""
     
-    # Center content
+    # Custom CSS
     st.markdown("""
-        <div style='text-align: center; padding: 80px 0 40px 0;'>
-            <h1>🐘 Mahavat Agent v1</h1>
-            <h3>Incident Detection & Remediation</h3>
-            <p style='color: #666;'>Powered by Amazon Aurora & Bedrock</p>
-        </div>
+        <style>
+        .header-flex {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .header-flex img {
+            width: 108px;
+            height: 135px;
+        }
+        .header-text h1 {
+            margin: 0;
+            font-size: 2rem;
+            color: #232F3E;
+        }
+        .header-text p {
+            margin: 5px 0 0 0;
+            color: #545B64;
+        }
+        .feature-badge {
+            display: inline-block;
+            background: #F0F8FF;
+            color: #0073BB;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            margin: 4px;
+        }
+        </style>
     """, unsafe_allow_html=True)
     
-    # Login form in center column
+    # Center everything
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.info("**🎯 Workshop Demo Access**\n\nClick below to login with demo credentials and access the Mahavat Agent")
+        # Header with logo and title using HTML flexbox
+        try:
+            import base64
+            with open("Mahavat.png", "rb") as f:
+                img_data = base64.b64encode(f.read()).decode()
+            
+            st.markdown(f"""
+                <div class="header-flex">
+                    <img src="data:image/png;base64,{img_data}" alt="Mahavat Logo">
+                    <div class="header-text">
+                        <h1>Mahavat Agent</h1>
+                        <p><strong>Incident Detection & Remediation</strong></p>
+                        <p style="font-size: 0.9rem; color: #879596;">Powered by Amazon Aurora & Amazon Bedrock</p>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+        except:
+            st.markdown("""
+                <div class="header-flex">
+                    <div style="font-size: 3rem;">🐘</div>
+                    <div class="header-text">
+                        <h1>Mahavat Agent</h1>
+                        <p><strong>Incident Detection & Remediation</strong></p>
+                        <p style="font-size: 0.9rem; color: #879596;">Powered by Amazon Aurora & Amazon Bedrock</p>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
         
-        if st.button("👤 Login with Demo User", use_container_width=True, type="primary", key="login_button"):
-            with st.spinner("Authenticating with AWS Cognito..."):
+        # Login section
+        st.markdown("### 🎯 Workshop Access")
+        st.markdown("Welcome to the DAT301 Workshop. Click below to access the Mahavat Agent with demo credentials.")
+        
+        st.markdown("")
+        
+        if st.button("🔐 Login with Demo User", use_container_width=True, type="primary", key="login_button"):
+            with st.spinner("🔄 Authenticating with AWS Cognito..."):
                 success, message, tokens = authenticate_with_cognito(DEMO_USERNAME, DEMO_PASSWORD)
                 
                 if success:
@@ -87,25 +144,39 @@ def show_login_page():
                 else:
                     st.error(f"❌ {message}")
         
+        # Features
+        st.markdown("")
+        st.markdown("#### ✨ Key Features")
+        st.markdown("""
+        <div style='text-align: center;'>
+            <span class='feature-badge'>🚨 Incident Detection</span>
+            <span class='feature-badge'>📋 Runbook Automation</span>
+            <span class='feature-badge'>☁️ AWS Integration</span>
+            <span class='feature-badge'>📊 Real-time Tracking</span>
+        </div>
+        """, unsafe_allow_html=True)
+        
         # Workshop info
-        with st.expander("ℹ️ About Demo Access"):
+        st.markdown("")
+        with st.expander("ℹ️ Workshop Information"):
             st.markdown(f"""
-            **Demo Credentials:**
+            **Session Details:**
             - **Username:** `{DEMO_USERNAME}`
-            - **Password:** Auto-authenticated on button click
-            - **Access Level:** Full access to all features
-            - **Session:** Active until browser tab is closed
+            - **Authentication:** AWS Cognito
+            - **Access Level:** Full workshop access
+            - **Session Duration:** Active until browser close
             
-            **Environment:**
-            - **Region:** {AWS_REGION}
-            - **DynamoDB:** {DYNAMODB_TABLE}
-            - **Knowledge Base:** {MAIN_KB_ID}
+            **Environment Configuration:**
+            - **Region:** `{AWS_REGION}`
+            - **DynamoDB Table:** `{DYNAMODB_TABLE}`
+            - **Knowledge Base ID:** `{MAIN_KB_ID}`
             
-            **Features:**
-            - Incident Detection & Remediation
-            - Runbook-driven Automation
-            - AWS Resource Management
-            - Real-time Incident Tracking
+            **Capabilities:**
+            - ✅ Automated incident detection and remediation
+            - ✅ Runbook-driven workflow execution
+            - ✅ AWS resource management and monitoring
+            - ✅ Real-time incident status tracking
+            - ✅ Integration with Amazon Bedrock for AI-powered analysis
             """)
 
 

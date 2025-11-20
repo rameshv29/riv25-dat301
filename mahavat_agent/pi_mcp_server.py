@@ -142,9 +142,12 @@ def get_performance_insights_metrics(cluster_identifier: str, metric_queries: li
         if not metric_queries:
             # Default metrics for lock analysis
             metric_queries = [
-                {"Metric": "db.SQL.Innodb_rows_read.avg"},
-                {"Metric": "db.wait_event.Lock/transactionid.avg"},
-                {"Metric": "db.wait_event.Lock/tuple.avg"}
+                #{"Metric": "db.SQL.Innodb_rows_read.avg"},
+                #{"Metric": "db.wait_event.Lock/transactionid.avg"},
+                #{"Metric": "db.wait_event.Lock/tuple.avg"}
+                {"Metric": "db.load.avg"},
+                {"Metric": "db.SQL.total_query_time.avg"},
+                {"Metric": "db.SQL.total_rows_returned.avg"}
             ]
         
         response = pi_client.get_resource_metrics(
@@ -194,8 +197,9 @@ def get_top_sql_statements(cluster_identifier: str, limit: int = 10):
         response = pi_client.describe_dimension_keys(
             ServiceType='RDS',
             Identifier=resource_id,
-            Metric='db.load',
-            GroupBy={'Group': 'db.sql_tokenized'},
+            Metric='db.load.avg', #changed by chirag
+            #GroupBy={'Group': 'db.sql_tokenized'},
+            GroupBy={'Group': 'db.sql'},
             StartTime=start_time.isoformat(),
             EndTime=end_time.isoformat(),
             MaxResults=limit
@@ -239,7 +243,7 @@ def get_wait_events(cluster_identifier: str, limit: int = 10):
         response = pi_client.describe_dimension_keys(
             ServiceType='RDS',
             Identifier=resource_id,
-            Metric='db.load',
+            Metric='db.load.avg', #chirag changed this
             GroupBy={'Group': 'db.wait_event'},
             StartTime=start_time.isoformat(),
             EndTime=end_time.isoformat(),

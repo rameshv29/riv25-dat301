@@ -183,6 +183,8 @@ export INCIDENT_TABLE=$DYNAMODB_TABLE
 # Cognito
 export COGNITO_USER_POOL_ID=$COGNITO_USER_POOL_ID
 export COGNITO_CLIENT_ID=$COGNITO_CLIENT_ID
+export DEMO_USERNAME=demo
+export DEMO_PASSWORD=WorkshopDemo2024!
 
 # Load testing aliases (using beautified scripts)
 alias iops-test='/workshop/load-test/iops-test.sh'
@@ -243,6 +245,25 @@ fi
 # Run database setup scripts on main database
 echo "🗄️ Running database setup scripts on main database..."
 bash /workshop/scripts/07-database-setup.sh "$MAIN_HOST" "$MAIN_PORT" "$MAIN_DB" "$MAIN_USER" "$MAIN_PASS" "$REGION" || echo "⚠️  Database setup had warnings (may already be configured)"
+
+# Create Cognito demo user
+echo "👤 Creating Cognito demo user..."
+aws cognito-idp admin-create-user \
+  --user-pool-id "$COGNITO_USER_POOL_ID" \
+  --username demo \
+  --user-attributes Name=email,Value=demo@workshop.local Name=email_verified,Value=true \
+  --temporary-password TempPass123! \
+  --message-action SUPPRESS \
+  --region "$REGION" 2>/dev/null || echo "⚠️  Demo user may already exist"
+
+aws cognito-idp admin-set-user-password \
+  --user-pool-id "$COGNITO_USER_POOL_ID" \
+  --username demo \
+  --password WorkshopDemo2025! \
+  --permanent \
+  --region "$REGION" 2>/dev/null || echo "⚠️  Password may already be set"
+
+echo "✅ Cognito demo user configured"
 
 # Set ownership
 chown -R ec2-user:ec2-user /workshop

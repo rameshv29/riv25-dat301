@@ -23,11 +23,169 @@ MAIN_KB_ID = os.environ.get('MAIN_KB_ID', '')
 BEDROCK_MODEL_ID = os.environ.get('BEDROCK_MODEL_ID', 'us.anthropic.claude-sonnet-4-20250514-v1:0')
 DATABASE_NAME = os.environ.get('DATABASE_NAME', 'workshop_db')
 RDS_CLUSTER_ARN = os.environ.get('RDS_CLUSTER_ARN', '')
+COGNITO_USER_POOL_ID = os.environ.get('COGNITO_USER_POOL_ID', '')
+COGNITO_CLIENT_ID = os.environ.get('COGNITO_CLIENT_ID', '')
+
+# Demo user credentials from environment
+DEMO_USERNAME = os.environ.get('DEMO_USERNAME', 'demo')
+DEMO_PASSWORD = os.environ.get('DEMO_PASSWORD', 'WorkshopDemo2025!')
 
 # Use main database secret ARN for PostgreSQL
 DATABASE_SECRET_ARN = os.environ.get('DATABASE_SECRET_ARN', '')
 POSTGRES_SECRET_ARN = DATABASE_SECRET_ARN  # Use main DB secret
 POSTGRES_RESOURCE_ARN = RDS_CLUSTER_ARN
+
+def authenticate_with_cognito(username: str, password: str) -> tuple[bool, str, dict]:
+    """Authenticate user with AWS Cognito
+    
+    Returns:
+        tuple: (success: bool, message: str, tokens: dict)
+    """
+    try:
+        cognito_client = boto3.client('cognito-idp', region_name=AWS_REGION)
+        
+        response = cognito_client.initiate_auth(
+            ClientId=COGNITO_CLIENT_ID,
+            AuthFlow='USER_PASSWORD_AUTH',
+            AuthParameters={
+                'USERNAME': username,
+                'PASSWORD': password
+            }
+        )
+        
+        return True, "Authentication successful!", response.get('AuthenticationResult', {})
+    
+    except cognito_client.exceptions.NotAuthorizedException:
+        return False, "Invalid username or password", {}
+    except cognito_client.exceptions.UserNotFoundException:
+        return False, "User not found", {}
+    except Exception as e:
+        return False, f"Authentication error: {str(e)}", {}
+
+def show_login_page():
+    """Display full-screen login page for demo user"""
+    
+    # Custom CSS
+    st.markdown("""
+        <style>
+        .header-flex {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .header-flex img {
+            width: 108px;
+            height: 135px;
+        }
+        .header-text h1 {
+            margin: 0;
+            font-size: 2rem;
+            color: #232F3E;
+        }
+        .header-text p {
+            margin: 5px 0 0 0;
+            color: #545B64;
+        }
+        .feature-badge {
+            display: inline-block;
+            background: #F0F8FF;
+            color: #0073BB;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            margin: 4px;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
+    # Center everything
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        # Header with logo and title using HTML flexbox
+        try:
+            import base64
+            with open("Mahavat-agent.png", "rb") as f:
+                img_data = base64.b64encode(f.read()).decode()
+            
+            st.markdown(f"""
+                <div class="header-flex">
+                    <img src="data:image/png;base64,{img_data}" alt="Mahavat Logo">
+                    <div class="header-text">
+                        <h1>Mahavat Agent v2</h1>
+                        <p><strong>Unified PostgreSQL & IDR Agent</strong></p>
+                        <p style="font-size: 0.9rem; color: #879596;">Powered by Amazon Aurora & Amazon Bedrock</p>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+        except:
+            st.markdown("""
+                <div class="header-flex">
+                    <div style="font-size: 3rem;">🐘</div>
+                    <div class="header-text">
+                        <h1>Mahavat Agent v2</h1>
+                        <p><strong>Unified PostgreSQL & IDR Agent</strong></p>
+                        <p style="font-size: 0.9rem; color: #879596;">Powered by Amazon Aurora & Amazon Bedrock</p>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+        
+        # Login section
+        st.markdown("### 🎯 Workshop Access")
+        st.markdown("Welcome to the DAT301 Workshop. Click below to access the Mahavat Agent with demo credentials.")
+        
+        st.markdown("")
+        
+        if st.button("🔐 Login with Demo User", use_container_width=True, type="primary", key="login_button"):
+            with st.spinner("🔄 Authenticating with AWS Cognito..."):
+                success, message, tokens = authenticate_with_cognito(DEMO_USERNAME, DEMO_PASSWORD)
+                
+                if success:
+                    st.session_state.authenticated = True
+                    st.session_state.username = DEMO_USERNAME
+                    st.session_state.auth_tokens = tokens
+                    st.session_state.login_time = datetime.now()
+                    st.success(f"✅ {message}")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error(f"❌ {message}")
+        
+        # Features
+        st.markdown("")
+        st.markdown("#### ✨ Key Features")
+        st.markdown("""
+        <div style='text-align: center;'>
+            <span class='feature-badge'>🐘 PostgreSQL Diagnostics</span>
+            <span class='feature-badge'>🚨 Incident Detection</span>
+            <span class='feature-badge'>📋 Runbook Automation</span>
+            <span class='feature-badge'>☁️ AWS Integration</span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Workshop info
+        st.markdown("")
+        with st.expander("ℹ️ Workshop Information"):
+            st.markdown(f"""
+            **Session Details:**
+            - **Username:** `{DEMO_USERNAME}`
+            - **Authentication:** AWS Cognito
+            - **Access Level:** Full workshop access
+            - **Session Duration:** Active until browser close
+            
+            **Environment Configuration:**
+            - **Region:** `{AWS_REGION}`
+            - **DynamoDB Table:** `{DYNAMODB_TABLE}`
+            - **Knowledge Base ID:** `{MAIN_KB_ID}`
+            
+            **Capabilities:**
+            - ✅ PostgreSQL performance diagnostics and optimization
+            - ✅ Automated incident detection and remediation
+            - ✅ Runbook-driven workflow execution
+            - ✅ AWS resource management and monitoring
+            - ✅ Real-time incident status tracking
+            - ✅ Integration with Amazon Bedrock for AI-powered analysis
+            """)
 
 def get_kpi(iconname, metricname, metricvalue):
     """Create KPI card"""
@@ -200,11 +358,8 @@ def create_available_mcp_clients():
     
     return available_clients
 
-# Global MCP clients (initialized once)
-if 'mcp_clients' not in st.session_state:
-    st.session_state.mcp_clients = create_available_mcp_clients()
-
-mcp_clients = st.session_state.mcp_clients
+# Global MCP clients (initialized after authentication)
+# Moved to main() function to avoid loading before login
 
 # Create standard tools list
 standard_tools = [current_time]
@@ -217,6 +372,9 @@ def postgres_diagnostic_specialist(
     workshop_mode: bool = False
 ) -> str:
     """PostgreSQL diagnostic specialist with available MCP servers."""
+    
+    # Get mcp_clients from session state
+    mcp_clients = st.session_state.get('mcp_clients', {})
     
     # Get available PostgreSQL MCP tools
     postgres_mcp_tools = []
@@ -397,6 +555,9 @@ def idr_incident_specialist(
     incident_data: dict = None
 ) -> str:
     """IDR specialist with available MCP servers."""
+    
+    # Get mcp_clients from session state
+    mcp_clients = st.session_state.get('mcp_clients', {})
     
     # Get available IDR MCP tools
     idr_mcp_tools = []
@@ -598,6 +759,9 @@ Provide comprehensive remediation guidance.
 
 def create_unified_mahavat_agent():
     """Create unified Mahavat agent with intelligent routing and direct MCP tool access"""
+    
+    # Get mcp_clients from session state
+    mcp_clients = st.session_state.get('mcp_clients', {})
     
     available_servers = list(mcp_clients.keys())
     
@@ -1008,7 +1172,7 @@ def show_all_incidents():
 
 def main():
     """Main application"""
-    st.set_page_config(page_title="Mahavat Agent - Unified Database Management", layout="wide")
+    st.set_page_config(page_title="Mahavat Agent v2 - Unified Database Management", layout="wide")
     
     st.markdown("""
         <style>
@@ -1020,6 +1184,21 @@ def main():
                 }
         </style>
         """, unsafe_allow_html=True)
+    
+    # Initialize authentication state
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+    
+    # Check authentication - show login page if not authenticated
+    if not st.session_state.authenticated:
+        show_login_page()
+        return
+    
+    # Initialize MCP clients (only after authentication)
+    if 'mcp_clients' not in st.session_state:
+        st.session_state.mcp_clients = create_available_mcp_clients()
+    
+    mcp_clients = st.session_state.mcp_clients
     
     # Initialize chat state
     if 'chat_messages' not in st.session_state:
@@ -1036,6 +1215,15 @@ def main():
         st.caption("Unified Database Management")
         st.caption("IDR + PostgreSQL Diagnostics")
         st.divider()
+        
+        # User info and logout
+        if st.session_state.get('authenticated'):
+            st.info(f"👤 **User:** {st.session_state.get('username', 'demo')}")
+            if st.button("🚪 Logout", use_container_width=True):
+                st.session_state.authenticated = False
+                st.session_state.clear()
+                st.rerun()
+            st.divider()
         
         page = st.radio("Navigation", ["Pending Incidents", "All Incidents"], key="page_nav")
         
