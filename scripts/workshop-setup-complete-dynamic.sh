@@ -184,7 +184,7 @@ export INCIDENT_TABLE=$DYNAMODB_TABLE
 export COGNITO_USER_POOL_ID=$COGNITO_USER_POOL_ID
 export COGNITO_CLIENT_ID=$COGNITO_CLIENT_ID
 export DEMO_USERNAME=demo
-export DEMO_PASSWORD=WorkshopDemo2024!
+export DEMO_PASSWORD=WorkshopDemo2025!
 
 # Load testing aliases (using beautified scripts)
 alias iops-test='/workshop/load-test/iops-test.sh'
