@@ -338,8 +338,7 @@ def create_idr_agent():
 
 **⚠️ COST DISCLAIMER:**
 - **BEFORE making ANY infrastructure changes** (modify-db-instance, modify-db-cluster, scaling, etc.), ALWAYS warn the user:
-  "⚠️ WARNING: This change will modify AWS infrastructure and may incur additional costs. The modification includes [describe change]. Do you want to proceed?"
-- Wait for explicit user confirmation before executing infrastructure modifications
+  "⚠️ WARNING: This change will modify AWS infrastructure and may incur additional costs. The modification includes [describe change]."
 - This applies to: instance class changes, ACU scaling, parameter changes, etc.
 
 **Example for IOPS incident:**
@@ -393,7 +392,7 @@ def handle_chat_message(prompt):
         context_prompt = f"Context: {st.session_state.selected_incident_context}\n\nUser request: {prompt}"
     
     try:
-        with st.spinner("Mahavat Agent thinking... (Check the terminal to see what the agent is doing in real-time)"):
+        with st.spinner("Mahavat Agent thinking... (Follow the logs in your terminal to see what the agent is doing in real-time)"):
             response = agent(context_prompt)
         
         # Add agent response
@@ -491,7 +490,7 @@ def show_pending_incidents():
         if selected_incident is None:
             col4.error("Please select an incident to get the runbook")
         else:
-            with col4.status("Agent retrieving runbook..."):
+            with col4.status("Agent retrieving runbook... (Follow the logs in your terminal to see what the agent is doing in real-time)"):
                 col4.markdown(f"***Runbook Instructions for {selected_incident['incident_id']}***")
                 
                 # Use agent to get runbook
@@ -521,7 +520,7 @@ Return ONLY the runbook text content, formatted for readability. Replace markdow
         if selected_incident is None:
             col4.error("Please select an incident to auto-remediate")
         else:
-            with col4.status("Agent remediating incident..."):
+            with col4.status("Agent remediating incident... (Follow the logs in your terminal to see what the agent is doing in real-time)"):
                 col4.markdown(f"***Auto-remediation for {selected_incident['incident_id']}***")
                 
                 # Use agent to remediate

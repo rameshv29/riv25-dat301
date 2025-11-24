@@ -908,7 +908,7 @@ def handle_chat_message(prompt):
         context_prompt = f"Context: {st.session_state.selected_incident_context}\n\nUser request: {prompt}"
     
     try:
-        with st.spinner("Mahavat Agent thinking... (Check the terminal to see what the agent is doing in real-time)"):
+        with st.spinner("Mahavat Agent thinking... (Follow the logs in your terminal to see what the agent is doing in real-time)"):
             response = unified_agent(context_prompt)
         
         st.session_state.chat_messages.append({"role": "assistant", "content": str(response)})
@@ -1081,7 +1081,7 @@ def show_pending_incidents():
         if selected_incident is None:
             col4.error("Please select an incident to auto-remediate")
         else:
-            with col4.status("Mahavat Agent remediating incident..."):
+            with col4.status("Mahavat Agent remediating incident... (Follow the logs in your terminal to see what the agent is doing in real-time)"):
                 col4.markdown(f"***Auto-remediation for {selected_incident['incident_id']}***")
                 
                 prompt = f"""Remediate this {selected_incident['incidentType']} incident on {selected_incident['incidentIdentifier']} in region {AWS_REGION}. 
