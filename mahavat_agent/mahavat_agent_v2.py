@@ -493,7 +493,7 @@ For database analysis, ALWAYS use this EXACT format with smaller headers:
 - **BEFORE making ANY infrastructure changes** (modify-db-instance, modify-db-cluster, scaling, etc.), ALWAYS warn the user:
   "⚠️ WARNING: This change will modify AWS infrastructure and may incur additional costs. The modification includes [describe change]. Do you want to proceed?"
 - Wait for explicit user confirmation before executing infrastructure modifications
-- This applies to: IOPS changes, instance class changes, storage modifications, ACU scaling, parameter changes, etc.
+- This applies to: instance class changes, ACU scaling, parameter changes, etc.
 
 **AWS CLI Command Validation (CRITICAL):**
 - BEFORE calling call_aws, verify:
@@ -680,7 +680,7 @@ For remediation, ALWAYS use this EXACT format:
 - **BEFORE making ANY infrastructure changes** (modify-db-instance, modify-db-cluster, scaling, etc.), ALWAYS warn the user:
   "⚠️ WARNING: This change will modify AWS infrastructure and may incur additional costs. The modification includes [describe change]. Do you want to proceed?"
 - Wait for explicit user confirmation before executing infrastructure modifications
-- This applies to: IOPS changes, instance class changes, storage modifications, ACU scaling, parameter changes, etc.
+- This applies to: instance class changes, ACU scaling, parameter changes, etc.
 
 **AWS CLI Command Validation (CRITICAL):**
 - BEFORE calling call_aws, verify:
@@ -847,7 +847,7 @@ def create_unified_mahavat_agent():
 - **BEFORE making ANY infrastructure changes** (modify-db-instance, modify-db-cluster, scaling, etc.), ALWAYS warn the user:
   "⚠️ WARNING: This change will modify AWS infrastructure and may incur additional costs. The modification includes [describe change]. Do you want to proceed?"
 - Wait for explicit user confirmation before executing infrastructure modifications
-- This applies to: IOPS changes, instance class changes, storage modifications, ACU scaling, parameter changes, etc.
+- This applies to: instance class changes, ACU scaling, parameter changes, etc.
 
 **AWS CLI Command Validation (CRITICAL):**
 - BEFORE calling call_aws, verify:
@@ -1162,10 +1162,10 @@ def show_all_incidents():
             "incident_time": "Incident Time",
             "alarm_name": "Alarm Name",
             "created_at": "Created At",
-            "runbook_used": "Runbook Used",
-            "remediation_steps": "Remediation Steps"
+            "runbook_used": "Runbook Used"
+            #"remediation_steps": "Remediation Steps"
         },
-        column_order=("incident_id", "incidentIdentifier", "incidentType", "incident_status", "incident_time", "runbook_used", "remediation_steps")
+        column_order=("incident_id", "incidentIdentifier", "incidentType", "incident_status", "incident_time", "runbook_used")
     )
     
     st.caption(f"Total incidents: {len(df)}")
