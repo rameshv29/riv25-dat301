@@ -722,7 +722,7 @@ For remediation, ALWAYS use this EXACT format:
 - AWS API MCP: Get cluster config, discover log groups (avoid RDS Data API due to secret ARN length limits)
 - Performance Insights: ALWAYS use get_performance_insights_metrics(cluster_identifier="..."), get_top_sql_statements(cluster_identifier="..."), get_wait_events(cluster_identifier="...") - DO NOT use call_aws for PI queries
 - CloudWatch MCP: Use describe_log_groups and execute_log_insights_query with discovered log groups
-- Main KB: Retrieve and display runbook content prominently at the start
+- Main KB: Retrieve and display runbook content prominently after the executive summary
 - DO NOT USE: PostgreSQL MCP server or postgres_query_provider (wrong database/not needed for IDR runbook)
 
 DATABASE: {DATABASE_NAME}, REGION: {AWS_REGION}
@@ -1000,7 +1000,7 @@ def show_pending_incidents():
         if selected_incident is None:
             col4.error("Please select an incident to get the runbook")
         else:
-            with col4.status("Mahavat Agent retrieving runbook..."):
+            with col4.status("Mahavat Agent retrieving runbook... (Follow the logs in your terminal to see what the agent is doing in real-time)"):
                 col4.markdown(f"***Runbook Instructions for {selected_incident['incident_id']}***")
                 
                 prompt = f"""Perform comprehensive IDR analysis for {selected_incident['incidentType']} incident on {selected_incident['incidentIdentifier']} in region {AWS_REGION}:
@@ -1230,7 +1230,7 @@ def main():
         st.divider()
         
         # Chat toggle in sidebar
-        if st.button("💬 Mahavat Agent Chat", use_container_width=True):
+        if st.button("💬 Mahavat Agent v2 Chat", use_container_width=True):
             st.session_state.show_chat = not st.session_state.show_chat
             st.rerun()
         
@@ -1269,7 +1269,7 @@ def main():
         # Chat header with controls in top-right corner
         chat_col1, chat_col2 = st.columns([4, 1])
         with chat_col1:
-            st.markdown("### 💬 Mahavat Agent Chat")
+            st.markdown("### 💬 Mahavat Agent v2 Chat")
         with chat_col2:
             btn_col1, btn_col2 = st.columns(2)
             with btn_col1:

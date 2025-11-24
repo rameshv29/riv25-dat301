@@ -140,7 +140,7 @@ run_stress_test() {
     
     log_info "Starting ACU stress test..."
     log_warning "This test will generate high CPU load on the database"
-    log_info "Test will run for approximately 600 seconds (10 minutes)..."
+    log_info "Test will run for approximately 1200 seconds (20 minutes)..."
     echo ""
     
     log_info "⏳ Creating stress test table (if needed)..."

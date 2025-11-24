@@ -171,7 +171,7 @@ def parse_input():
            dest='duration',
            action='store',
            type="int",
-           default=600,
+           default=1200,
            metavar='duration',
            help='Test run duration (seconds)')
     parser.add_option('-n','--threads',
