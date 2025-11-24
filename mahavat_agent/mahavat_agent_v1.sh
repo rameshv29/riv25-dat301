@@ -139,6 +139,11 @@ activate_virtual_environment() {
 start_streamlit_app() {
     log_section "Starting $SCRIPT_NAME"
     
+    # Kill any existing Streamlit processes
+    log_info "Stopping any existing Streamlit applications..."
+    pkill -f streamlit || true
+    sleep 2
+    
     log_info "Launching Streamlit application..."
     log_info "Access URL: ${GREEN}http://localhost:$STREAMLIT_PORT${NC}"
     echo ""

@@ -908,7 +908,7 @@ def handle_chat_message(prompt):
         context_prompt = f"Context: {st.session_state.selected_incident_context}\n\nUser request: {prompt}"
     
     try:
-        with st.spinner("Mahavat Agent thinking..."):
+        with st.spinner("Mahavat Agent thinking... (Check the terminal to see what the agent is doing in real-time)"):
             response = unified_agent(context_prompt)
         
         st.session_state.chat_messages.append({"role": "assistant", "content": str(response)})

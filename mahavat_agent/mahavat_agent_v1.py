@@ -393,7 +393,7 @@ def handle_chat_message(prompt):
         context_prompt = f"Context: {st.session_state.selected_incident_context}\n\nUser request: {prompt}"
     
     try:
-        with st.spinner("IDR Agent thinking..."):
+        with st.spinner("Mahavat Agent thinking... (Check the terminal to see what the agent is doing in real-time)"):
             response = agent(context_prompt)
         
         # Add agent response
