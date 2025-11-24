@@ -491,8 +491,7 @@ For database analysis, ALWAYS use this EXACT format with smaller headers:
 
 **⚠️ COST DISCLAIMER:**
 - **BEFORE making ANY infrastructure changes** (modify-db-instance, modify-db-cluster, scaling, etc.), ALWAYS warn the user:
-  "⚠️ WARNING: This change will modify AWS infrastructure and may incur additional costs. The modification includes [describe change]. Do you want to proceed?"
-- Wait for explicit user confirmation before executing infrastructure modifications
+  "⚠️ WARNING: This change will modify AWS infrastructure and may incur additional costs. The modification includes [describe change]."
 - This applies to: instance class changes, ACU scaling, parameter changes, etc.
 
 **AWS CLI Command Validation (CRITICAL):**
@@ -845,8 +844,7 @@ def create_unified_mahavat_agent():
 
 **⚠️ COST DISCLAIMER:**
 - **BEFORE making ANY infrastructure changes** (modify-db-instance, modify-db-cluster, scaling, etc.), ALWAYS warn the user:
-  "⚠️ WARNING: This change will modify AWS infrastructure and may incur additional costs. The modification includes [describe change]. Do you want to proceed?"
-- Wait for explicit user confirmation before executing infrastructure modifications
+  "⚠️ WARNING: This change will modify AWS infrastructure and may incur additional costs. The modification includes [describe change]."
 - This applies to: instance class changes, ACU scaling, parameter changes, etc.
 
 **AWS CLI Command Validation (CRITICAL):**
