@@ -63,7 +63,8 @@ def lambda_handler(event, context):
     secret_name = event['secret_name']
     workload_type = event['workload_type']
     duration_seconds = event.get('duration_seconds', 60)  # Default duration: 60 seconds
-    num_threads = event.get('num_threads', os.cpu_count() * 8)  # Default threads: 2x CPUs
+    #num_threads = event.get('num_threads', os.cpu_count() * 8)  # Default threads: 2x CPUs
+    num_threads = 2
     region_name = event.get('region_name', 'us-west-2')
 
     username, password, host, dbname = get_db_credentials(secret_name, region_name)

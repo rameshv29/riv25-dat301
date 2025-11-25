@@ -16,5 +16,6 @@ Follow the instructions in this run book to remediate the issues related to the 
 
 3. Get the current ACU utilization metrics for the last 1 hour for the Aurora instance.
 
-4. Check if the maximum ACU utilization from the ACU metrics is above 80% , then increase the max ACU by 20%.
+4. Get the current Average active sessions (AAS) also known as DB Load from PI metrics for last 1 hour for the Aurora instance.
 
+5. Check if the maximum ACU utilization from the ACU metrics is above 90% , then increase the max ACU by 5 Times Maximum of Average active sessions (AAS).
