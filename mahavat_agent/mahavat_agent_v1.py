@@ -682,8 +682,31 @@ def main():
         
         st.divider()
         
+        # AWS-branded button styling with orange gradient
+        st.markdown("""
+            <style>
+            div.stButton > button[kind="primary"] {
+                background: linear-gradient(135deg, #FF9900 0%, #EC7211 100%);
+                color: white;
+                border: none;
+                font-weight: 600;
+                box-shadow: 0 2px 4px rgba(255, 153, 0, 0.3);
+            }
+            div.stButton > button[kind="primary"]:hover {
+                background: linear-gradient(135deg, #EC7211 0%, #FF9900 100%);
+                box-shadow: 0 4px 6px rgba(255, 153, 0, 0.4);
+            }
+            </style>
+        """, unsafe_allow_html=True)
+        
         # Chat toggle in sidebar
-        if st.button("💬 Mahavat Agent v1 Chat", use_container_width=True):
+        if st.button(
+            "💬 Mahavat Agent v1 Chat",
+            use_container_width=True,
+            type="primary",
+            help="Toggle the AI-powered chat interface",
+            key="chat_toggle"
+        ):
             st.session_state.show_chat = not st.session_state.show_chat
             st.rerun()
         

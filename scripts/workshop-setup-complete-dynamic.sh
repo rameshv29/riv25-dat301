@@ -333,6 +333,27 @@ echo "✅ Cognito demo user configured"
 chown -R ec2-user:ec2-user /workshop
 chown ec2-user:ec2-user /home/ec2-user/.bashrc
 
+# Clean up bootstrap incidents from DynamoDB
+echo ""
+echo "🧹 Cleaning up bootstrap incidents from DynamoDB..."
+INCIDENT_IDS=$(aws dynamodb scan \
+  --table-name "$DYNAMODB_TABLE" \
+  --region "$REGION" \
+  --query 'Items[].incident_id.S' \
+  --output text 2>/dev/null)
+
+if [ -n "$INCIDENT_IDS" ]; then
+  for incident_id in $INCIDENT_IDS; do
+    aws dynamodb delete-item \
+      --table-name "$DYNAMODB_TABLE" \
+      --key "{\"incident_id\": {\"S\": \"$incident_id\"}}" \
+      --region "$REGION" 2>/dev/null || true
+  done
+  echo "✅ Cleaned up bootstrap incidents"
+else
+  echo "✅ No bootstrap incidents to clean"
+fi
+
 echo ""
 echo "🎉 Workshop setup completed successfully!"
 echo ""

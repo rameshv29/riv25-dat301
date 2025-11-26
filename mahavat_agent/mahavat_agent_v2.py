@@ -351,10 +351,7 @@ def create_available_mcp_clients():
     
     # Final status in sidebar
     with status_container:
-        st.success(f"✅ {len(available_clients)} servers active")
-        if available_clients:
-            server_list = ", ".join(available_clients.keys())
-            st.caption(f"Active: {server_list}")
+        st.success(f"✅ {len(available_clients)} MCP servers initialized")
     
     return available_clients
 
@@ -1227,13 +1224,54 @@ def main():
         
         st.divider()
         
+        # AWS-branded button styling with orange gradient
+        st.markdown("""
+            <style>
+            div.stButton > button[kind="primary"] {
+                background: linear-gradient(135deg, #FF9900 0%, #EC7211 100%);
+                color: white;
+                border: none;
+                font-weight: 600;
+                box-shadow: 0 2px 4px rgba(255, 153, 0, 0.3);
+            }
+            div.stButton > button[kind="primary"]:hover {
+                background: linear-gradient(135deg, #EC7211 0%, #FF9900 100%);
+                box-shadow: 0 4px 6px rgba(255, 153, 0, 0.4);
+            }
+            </style>
+        """, unsafe_allow_html=True)
+        
         # Chat toggle in sidebar
-        if st.button("💬 Mahavat Agent v2 Chat", use_container_width=True):
+        if st.button(
+            "💬 Mahavat Agent v2 Chat",
+            use_container_width=True,
+            type="primary",
+            help="Toggle the AI-powered chat interface",
+            key="chat_toggle"
+        ):
             st.session_state.show_chat = not st.session_state.show_chat
             st.rerun()
         
         st.divider()
         st.caption("Built with Strands Agents-as-Tools")
+        
+        # Custom CSS for MCP Server Status expander - lighter version of chat button
+        st.markdown("""
+            <style>
+            /* Lighter version of chat button orange for MCP Server Status */
+            div[data-testid="stExpander"] details summary {
+                background: linear-gradient(135deg, rgba(255, 153, 0, 0.6) 0%, rgba(236, 114, 17, 0.6) 100%);
+                color: white;
+                font-weight: 600;
+                border-radius: 4px;
+                padding: 8px 12px;
+                border: none;
+            }
+            div[data-testid="stExpander"] details summary:hover {
+                background: linear-gradient(135deg, rgba(236, 114, 17, 0.6) 0%, rgba(255, 153, 0, 0.6) 100%);
+            }
+            </style>
+        """, unsafe_allow_html=True)
         
         # MCP Server Status - shows initialization messages here
         with st.expander("🛠️ MCP Server Status"):
